@@ -7,6 +7,7 @@ const { pushMenu, MAIN_MENU_TOP } = require('../menu/mainmenu');
 const { icon } = require('../iconc');
 const util = require('../util');
 const dialog = require('../dialog/index');
+const { storage } = require('../storage');
 
 // ── 设置分组 ──────────────────────────────────────────────
 const cloudGroup = new SettingGroup({ title: '云端同步', index: 6 });
@@ -163,7 +164,11 @@ function showLoginDialog() {
     if (result.success) {
       d.close();
       setTimeout(() => { d.destroy(); }, 300);
+      // 登录成功后开启自动同步并从云端下载数据
+      cloudSync.config.autoSync = true;
+      cloudSync.saveConfig();
       refreshUI();
+      cloudSync.download().catch(() => {});
     } else {
       errorEl.textContent = result.error || '登录失败';
     }
@@ -210,7 +215,11 @@ function showLoginDialog() {
       } else {
         d.close();
         setTimeout(() => { d.destroy(); }, 300);
+        // 注册成功后开启自动同步并从云端下载数据
+        cloudSync.config.autoSync = true;
+        cloudSync.saveConfig();
         refreshUI();
+        cloudSync.download().catch(() => {});
       }
     } else {
       errorEl.textContent = result.error || '注册失败';
@@ -432,11 +441,24 @@ function showResetPasswordDialog() {
 // ── 注册密码重置回调 ──────────────────────────────────────
 supabaseAuth._onPasswordRecovery = showResetPasswordDialog;
 
+// ── 数据变更时自动同步到云端 ──────────────────────────────
+let _autoSyncTimer = null;
+storage.on('storage', () => {
+  if (!cloudSync.config.autoSync || !cloudSync.isAuthenticated()) return;
+  // 防抖：3秒内多次变更只触发一次上传
+  clearTimeout(_autoSyncTimer);
+  _autoSyncTimer = setTimeout(() => {
+    cloudSync.upload().catch(() => {});
+  }, 3000);
+});
+
 // ── 初始化：恢复登录状态 ──────────────────────────────────
 supabaseAuth.init().then((isAuth) => {
   refreshUI();
-  // 登录成功后自动从云端下载数据
+  // 登录成功后自动从云端下载数据，并开启自动同步
   if (isAuth) {
+    cloudSync.config.autoSync = true;
+    cloudSync.saveConfig();
     cloudSync.download().catch(() => {});
   }
 });
