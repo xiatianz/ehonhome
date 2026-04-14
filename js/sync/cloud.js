@@ -1,25 +1,42 @@
-// 云端同步模块 - GitHub Gist（无需服务器，直接调用 GitHub API）
+// 云端同步模块 - Supabase（用户无需配置，开箱即用）
 const { gS } = require('../storage');
-const toast = require('../toast');
+const toast  = require('../toast');
 
-const GIST_TOKEN_KEY  = 'cloud_gist_token';   // GitHub Personal Access Token
-const GIST_ID_KEY     = 'cloud_gist_id';      // Gist ID（上传后保存，用于后续更新）
-const GIST_FILENAME   = 'ehon-sync-data.json'; // Gist 中的文件名
-const DEVICE_ID_KEY   = 'cloud_device_id';    // 本机设备标识
-const SYNC_CONFIG_KEY = 'cloud_sync_config';   // 同步配置
+const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
+const TABLE        = 'sync_data';
+const DEVICE_ID_KEY = 'cloud_device_id';
+
+// ── Supabase REST 请求封装 ─────────────────────────────────
+const sbHeaders = {
+  'apikey':        SUPABASE_KEY,
+  'Authorization': `Bearer ${SUPABASE_KEY}`,
+  'Content-Type':  'application/json',
+};
+
+async function sbFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: { ...sbHeaders, ...(options.headers || {}) },
+  });
+  if (res.status === 204) return null;          // DELETE / no content
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`);
+  return json;
+}
 
 class CloudSync {
   constructor() {
-    this.config = this.loadConfig();
+    this.config   = this._loadConfig();
     this.deviceId = this._initDeviceId();
   }
 
-  // ── 设备 ID ──────────────────────────────────────────────
+  // ── 设备 ID（唯一标识，自动生成，长期保存）────────────────
   _initDeviceId() {
     let id = localStorage.getItem(DEVICE_ID_KEY);
     if (!id) {
-      id = 'device_' + Math.random().toString(36).slice(2, 15) +
-                       Math.random().toString(36).slice(2, 15);
+      id = 'dev_' + Math.random().toString(36).slice(2, 15) +
+                    Math.random().toString(36).slice(2, 15);
       localStorage.setItem(DEVICE_ID_KEY, id);
     }
     return id;
@@ -27,8 +44,13 @@ class CloudSync {
 
   getCurrentDeviceId() { return this.deviceId; }
 
-  // ── 配置 ─────────────────────────────────────────────────
-  loadConfig() {
+  setDeviceId(id) {
+    this.deviceId = id.trim();
+    localStorage.setItem(DEVICE_ID_KEY, this.deviceId);
+  }
+
+  // ── 同步配置 ──────────────────────────────────────────────
+  _loadConfig() {
     const sto = gS('sync');
     return sto.config || { lastSync: null, autoSync: false };
   }
@@ -40,16 +62,12 @@ class CloudSync {
 
   getLastSyncTime() { return this.config.lastSync; }
 
-  // ── GitHub Token ──────────────────────────────────────────
-  getToken()       { return localStorage.getItem(GIST_TOKEN_KEY) || ''; }
-  setToken(token)  { localStorage.setItem(GIST_TOKEN_KEY, token.trim()); }
-  hasToken()       { return !!this.getToken(); }
+  // 兼容旧接口
+  isEnabled()  { return true; }
+  enable()     {}
+  disable()    {}
 
-  // ── Gist ID ───────────────────────────────────────────────
-  getGistId()      { return localStorage.getItem(GIST_ID_KEY) || ''; }
-  setGistId(id)    { localStorage.setItem(GIST_ID_KEY, id.trim()); }
-
-  // ── 本地数据收集 ──────────────────────────────────────────
+  // ── 收集本地数据 ──────────────────────────────────────────
   getAllLocalData() {
     const keys = ['setting', 'link', 'says', 'hello', 'background', 'custom', 'oobe'];
     const data = {};
@@ -58,13 +76,13 @@ class CloudSync {
         const sto = gS(key);
         if (sto) data[key] = sto.getAll ? sto.getAll() : sto;
       } catch (e) {
-        console.error(`[CloudSync] Failed to get "${key}":`, e);
+        console.error(`[Sync] get "${key}" failed:`, e);
       }
     });
     return data;
   }
 
-  // ── 合并云端数据到本地 ─────────────────────────────────────
+  // ── 合并云端数据到本地 ────────────────────────────────────
   mergeCloudData(cloudData) {
     Object.keys(cloudData).forEach(key => {
       if (key.startsWith('_')) return;
@@ -72,129 +90,71 @@ class CloudSync {
         const sto = gS(key);
         if (sto && cloudData[key]) Object.assign(sto, cloudData[key]);
       } catch (e) {
-        console.error(`[CloudSync] Failed to merge "${key}":`, e);
+        console.error(`[Sync] merge "${key}" failed:`, e);
       }
     });
   }
 
-  // ── GitHub API 请求封装 ───────────────────────────────────
-  async _githubFetch(url, options = {}) {
-    const token = this.getToken();
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.message || `HTTP ${res.status}`);
-    return json;
-  }
-
-  // ── 上传到 GitHub Gist ────────────────────────────────────
+  // ── 上传到 Supabase ───────────────────────────────────────
   async upload() {
-    if (!this.hasToken()) {
-      toast.show('请先在设置中填写 GitHub Token');
-      return { success: false, error: 'No token' };
-    }
-
     try {
-      const data = this.getAllLocalData();
-      data._lastSync  = new Date().toISOString();
-      data._deviceId  = this.deviceId;
-      const content   = JSON.stringify(data, null, 2);
-      const files     = { [GIST_FILENAME]: { content } };
+      toast.show('正在同步...');
+      const data       = this.getAllLocalData();
+      const updated_at = new Date().toISOString();
 
-      let result;
-      const gistId = this.getGistId();
+      await sbFetch(TABLE, {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({
+          device_id:  this.deviceId,
+          data,
+          updated_at,
+        }),
+      });
 
-      if (gistId) {
-        // 更新已有 Gist
-        result = await this._githubFetch(
-          `https://api.github.com/gists/${gistId}`,
-          { method: 'PATCH', body: JSON.stringify({ files }) }
-        );
-      } else {
-        // 创建新 Gist
-        result = await this._githubFetch(
-          'https://api.github.com/gists',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              description: 'Ehon起始页同步数据',
-              public: false,
-              files,
-            }),
-          }
-        );
-        this.setGistId(result.id);
-      }
-
-      this.config.lastSync = data._lastSync;
+      this.config.lastSync = updated_at;
       this.saveConfig();
-      toast.show('数据已同步到 GitHub Gist ✓');
-      return { success: true, gistId: result.id };
+      toast.show('数据已同步到云端 ✓');
+      return { success: true };
 
     } catch (error) {
       toast.show('同步失败: ' + error.message);
+      console.error('[Sync] upload error:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // ── 从 GitHub Gist 下载 ───────────────────────────────────
+  // ── 从 Supabase 下载 ──────────────────────────────────────
   async download() {
-    if (!this.hasToken()) {
-      toast.show('请先在设置中填写 GitHub Token');
-      return { success: false, error: 'No token' };
-    }
-
-    const gistId = this.getGistId();
-    if (!gistId) {
-      toast.show('请先上传数据，或在设置中填写 Gist ID');
-      return { success: false, error: 'No gist ID' };
-    }
-
     try {
-      const gist    = await this._githubFetch(`https://api.github.com/gists/${gistId}`);
-      const file    = gist.files[GIST_FILENAME];
-      if (!file) throw new Error('Gist 中没有找到同步数据文件');
+      toast.show('正在下载...');
+      const rows = await sbFetch(
+        `${TABLE}?device_id=eq.${encodeURIComponent(this.deviceId)}&select=data,updated_at`
+      );
 
-      // 如果内容被截断需要单独获取
-      const content = file.truncated
-        ? await (await fetch(file.raw_url)).text()
-        : file.content;
+      if (!rows || rows.length === 0) {
+        toast.show('云端暂无数据');
+        return { success: false, error: 'No data' };
+      }
 
-      const cloudData = JSON.parse(content);
-      this.mergeCloudData(cloudData);
+      const { data, updated_at } = rows[0];
+      this.mergeCloudData(data);
 
-      this.config.lastSync = cloudData._lastSync || new Date().toISOString();
+      this.config.lastSync = updated_at;
       this.saveConfig();
-      toast.show('数据已从 GitHub Gist 恢复 ✓');
+      toast.show('数据已从云端恢复 ✓');
       return { success: true };
 
     } catch (error) {
       toast.show('下载失败: ' + error.message);
+      console.error('[Sync] download error:', error);
       return { success: false, error: error.message };
     }
   }
 
   // ── 自动同步 ──────────────────────────────────────────────
   async autoSync() {
-    if (this.config.autoSync && this.hasToken()) {
-      return await this.upload();
-    }
-  }
-
-  // ── 兼容旧接口（enable / disable / isEnabled）─────────────
-  isEnabled()  { return this.hasToken(); }
-  enable()     { toast.show('请在设置中填写 GitHub Token 以启用同步'); }
-  disable()    {
-    localStorage.removeItem(GIST_TOKEN_KEY);
-    localStorage.removeItem(GIST_ID_KEY);
-    toast.show('已清除同步配置');
+    if (this.config.autoSync) return await this.upload();
   }
 }
 
