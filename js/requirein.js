@@ -23,7 +23,7 @@ var custom = require('./custom/index.js');
 var background = require('./background/index.js');
 var searchEditor = require('./search/editor.js');
 var notice = require('./notice/index.js');
-require('./notice/tuisong');
+// require('./notice/tuisong'); // 禁用通知推送
 require('./safe.js');
 var addon = require('./addon/index.js');
 var sync = require('./sync/index.js');
