@@ -114,14 +114,13 @@ class CloudSync {
   async getLocalLinkData() {
     return new Promise((resolve) => {
       link.ready(() => {
-        link.getCateAll((cate) => {
-          link.getLinks(null, (links) => {
-            link.getCates((catelist) => {
-              resolve({
-                links: links || [],
-                cate: cate || {},
-                catelist: catelist || [],
-              });
+        link.getCateAll((res) => {
+          const cate = res.data || {};
+          link.getLinks(null, (res2) => {
+            const links = res2.data || [];
+            link.getCates((res3) => {
+              const catelist = res3.data || [];
+              resolve({ links, cate, catelist });
             });
           });
         });
@@ -241,9 +240,6 @@ class CloudSync {
 
       this.config.lastSync = updated_at;
       this.saveConfig();
-
-      // 触发 link 模块的 change 事件，让 UI 重新渲染
-      link.getCates && link.getCates(() => {});
 
       toast.show('同步成功，数据已合并 ✓');
       return { success: true };

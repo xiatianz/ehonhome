@@ -77,6 +77,15 @@ link.on('change',function(cl){
         cateui.drawCate();
         cateui.cateWidthShiPei();
         cateui.actCate();
+        // 重绘当前分类的链接列表
+        var actcate = linkF.$('.cate-bar-items .cate-item.active');
+        if(actcate){
+            var cateName = actcate.hasClass('mr') ? null : actcate.innerText;
+            link.getLinks(cateName, ls => {
+                linkui.setLinklist(ls.data);
+                linkui.drawLinks();
+            });
+        }
         return;
     }
     var actcate = linkF.$('.cate-bar-items .cate-item.active');
