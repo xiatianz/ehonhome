@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub 登录回调</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .loading {
+      font-size: 18px;
+      color: #333;
+    }
+    .success {
+      color: #28a745;
+    }
+    .error {
+      color: #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="status" class="loading">正在处理登录...</div>
+  </div>
+  
+  <script>
+    async function handleCallback() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      
+      if (error) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = '登录失败: ' + error;
+        
+        // 通知父窗口
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'oauth-error',
+            message: error
+          }, window.location.origin);
+        }
+        return;
+      }
+      
+      if (!code) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = '授权码缺失';
+        return;
+      }
+      
+      try {
+        // 调用后端 API 换取 token
+        const response = await fetch('/api/auth/github?code=' + encodeURIComponent(code));
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('status').className = 'success';
+          document.getElementById('status').textContent = '登录成功！正在关闭窗口...';
+          
+          // 通知父窗口
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'oauth-success',
+              token: result.token,
+              user: result.user
+            }, window.location.origin);
+          }
+          
+          // 3秒后关闭窗口
+          setTimeout(() => {
+            window.close();
+          }, 1500);
+        } else {
+          throw new Error(result.error || '登录失败');
+        }
+      } catch (err) {
+        document.getElementById('status').className = 'error';
+        document.getElementById('status').textContent = '登录失败: ' + err.message;
+        
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'oauth-error',
+            message: err.message
+          }, window.location.origin);
+        }
+      }
+    }
+    
+    handleCallback();
+  </script>
+</body>
+</html>
