@@ -35,10 +35,10 @@ function copyDir(src, dest) {
 // 复制 docs/ 下的所有文件到根目录
 copyDir(path.join(__dirname, 'docs'), __dirname);
 
-// 复制 functions/ 到根目录（EdgeOne Pages Functions 必需）
-if (fs.existsSync(path.join(__dirname, 'functions'))) {
-  console.log('Copying functions/ to docs/ for EdgeOne Functions...');
-  copyDir(path.join(__dirname, 'functions'), path.join(__dirname, 'docs', 'functions'));
+// 复制 cloud-functions/ 到 docs/（EdgeOne Cloud Functions 必需）
+if (fs.existsSync(path.join(__dirname, 'cloud-functions'))) {
+  console.log('Copying cloud-functions/ to docs/ for EdgeOne Cloud Functions...');
+  copyDir(path.join(__dirname, 'cloud-functions'), path.join(__dirname, 'docs', 'cloud-functions'));
 }
 
 // 复制 oauth-callback.html 到 docs/
