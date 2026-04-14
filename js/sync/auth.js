@@ -130,8 +130,19 @@ class SupabaseAuth {
 
       throw new Error('注册失败');
     } catch (error) {
-      toast.show('注册失败: ' + error.message);
-      return { success: false, error: error.message };
+      // 友好化常见错误提示
+      let msg = error.message;
+      if (msg.includes('user_already_exists') || msg.includes('User already registered')) {
+        msg = '该邮箱已注册，请直接登录';
+      } else if (msg.includes('Password should be')) {
+        msg = '密码强度不足，至少需要6位';
+      } else if (msg.includes('Invalid email')) {
+        msg = '邮箱格式不正确';
+      } else if (msg.includes('422')) {
+        msg = '该邮箱已注册，请直接登录';
+      }
+      toast.show('注册失败: ' + msg);
+      return { success: false, error: msg, code: 'user_already_exists' };
     }
   }
 
@@ -164,8 +175,17 @@ class SupabaseAuth {
 
       throw new Error('登录失败');
     } catch (error) {
-      toast.show('登录失败: ' + error.message);
-      return { success: false, error: error.message };
+      // 友好化常见错误提示
+      let msg = error.message;
+      if (msg.includes('Invalid login credentials')) {
+        msg = '邮箱或密码不正确';
+      } else if (msg.includes('Email not confirmed')) {
+        msg = '邮箱未验证，请查收验证邮件';
+      } else if (msg.includes('429')) {
+        msg = '请求过于频繁，请稍后再试';
+      }
+      toast.show('登录失败: ' + msg);
+      return { success: false, error: msg };
     }
   }
 
