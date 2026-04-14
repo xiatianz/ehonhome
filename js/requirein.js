@@ -25,7 +25,7 @@ var searchEditor = require('./search/editor.js');
 var notice = require('./notice/index.js');
 // require('./notice/tuisong'); // 禁用通知推送
 require('./safe.js');
-var addon = { getAddonList: function(){return [];} };
+var addon = require('./addon/index.js');
 var sync = require('./sync/index.js');
 require('./hotkey.js'); 
 require('./ignores/index.js');
