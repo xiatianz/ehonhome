@@ -25,7 +25,7 @@ var searchEditor = require('./search/editor.js');
 var notice = require('./notice/index.js');
 // require('./notice/tuisong'); // 禁用通知推送
 require('./safe.js');
-var addon = require('./addon/index.js');
+var addon = { getAddonList: function(){return [];} };
 var sync = require('./sync/index.js');
 require('./hotkey.js'); 
 require('./ignores/index.js');
@@ -34,27 +34,13 @@ require('./oobe/index.js');
 require('./rainbowegg/index.js');
 require('./hello/index.js');
 
-// 公共API不能直接操作插件，需要复写方法
-var _upaddon = {};
-var pbls = ['runAddon', 'enable', 'disable', 'upupdate', 'upinstallByUrl', 'upinstallByOfficialMarket', 'upuninstall', 'installByLocal'];
-for (var k in addon) {
-  if (pbls.indexOf(k) == -1) {
-    _upaddon[k] = addon[k];
-  }
-}
-_upaddon.update = addon.upupdate;
-_upaddon.installByUrl = addon.upinstallByUrl;
-_upaddon.installByOfficialMarket = addon.upinstallByOfficialMarket;
-_upaddon.uninstall = addon.upuninstall;
-
-
 window.quik = {
   searchEditor,
   guidecreator,
   fcard,
   custom,
   sync,
-  addon: _upaddon,
+  addon,
   storage,
   omnibox,
   util,
