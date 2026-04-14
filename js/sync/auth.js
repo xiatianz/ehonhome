@@ -69,8 +69,11 @@ class SupabaseAuth {
       'Content-Type': 'application/json',
     };
 
-    // 如果有 session，添加 access token
-    if (this.session?.access_token) {
+    // 仅对需要认证的端点添加 Authorization header
+    // token/signup/recover 等端点不需要 Authorization
+    const authEndpoints = ['user', 'logout'];
+    const needsAuth = authEndpoints.some(ep => endpoint.startsWith(ep) || endpoint === ep);
+    if (needsAuth && this.session?.access_token) {
       headers['Authorization'] = `Bearer ${this.session.access_token}`;
     }
 
@@ -90,7 +93,8 @@ class SupabaseAuth {
       const json = JSON.parse(text);
       
       if (!res.ok) {
-        throw new Error(json.message || json.error_description || json.error || `HTTP ${res.status}`);
+        const errMsg = json.msg || json.message || json.error_description || json.error || `HTTP ${res.status}`;
+        throw new Error(errMsg);
       }
 
       return json;
@@ -207,17 +211,26 @@ class SupabaseAuth {
     if (!hash) return false;
     
     const params = new URLSearchParams(hash);
-    const access_token = params.get('access_token');
-    if (!access_token) return false;
     
-    // 检查是否有错误
+    // 优先检查错误（如 otp_expired、access_denied 等）
     const error = params.get('error');
+    const error_code = params.get('error_code');
     const error_description = params.get('error_description');
     if (error) {
-      this._oauthError = error_description || error;
+      // 友好化错误提示
+      if (error_code === 'otp_expired' || error_description?.includes('expired')) {
+        this._oauthError = '链接已过期，请重新发送重置邮件';
+      } else if (error === 'access_denied') {
+        this._oauthError = '访问被拒绝';
+      } else {
+        this._oauthError = error_description || error;
+      }
       this._cleanHash();
       return false;
     }
+    
+    const access_token = params.get('access_token');
+    if (!access_token) return false;
     
     const refresh_token = params.get('refresh_token');
     const expires_in = params.get('expires_in');
