@@ -43,7 +43,17 @@ class CloudSync {
     try {
       // 打开 GitHub OAuth 授权窗口
       const authUrl = `${API_BASE}/api/auth/github`;
+      console.log('Opening OAuth URL:', authUrl);
+      
       const popup = window.open(authUrl, 'github-oauth', 'width=600,height=700');
+      
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        // 弹窗被拦截
+        toast.show('请允许弹窗，或点击链接登录');
+        // 在新标签页打开
+        window.open(authUrl, '_blank');
+        return { success: false, error: 'Popup blocked' };
+      }
       
       // 监听消息
       return new Promise((resolve, reject) => {
