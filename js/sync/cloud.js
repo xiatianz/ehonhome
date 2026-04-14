@@ -129,7 +129,7 @@ class CloudSync {
     });
   }
 
-  // ── 上传到 Supabase ───────────────────────────────────────
+  // ── 上传到 Supabase（先合并云端数据，再上传）──────────
   async upload(silent) {
     if (!this.isAuthenticated()) {
       if (!silent) toast.show('请先登录后再同步');
@@ -139,17 +139,26 @@ class CloudSync {
     try {
       if (!silent) toast.show('正在同步...');
 
-      // 通过 link 模块正确读取链接数据（包括 IndexedDB）
-      const linkData = await this.getLocalLinkData();
-      const updated_at = new Date().toISOString();
       const user_id = this.getUserId();
+      const localLinkData = await this.getLocalLinkData();
 
-      const data = { link: linkData };
-
-      // 先查询该用户是否已有数据
+      // 先读取云端数据，与本地合并后再上传（避免覆盖其他设备的数据）
+      let mergedLinkData = localLinkData;
       const existing = await sbFetch(
-        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=id`
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data`
       );
+
+      if (existing && existing.length > 0 && existing[0].data?.link) {
+        const cloudLinkData = existing[0].data.link;
+        mergedLinkData = {
+          links: mergeLinkArrays(localLinkData.links, cloudLinkData.links),
+          cate: mergeCateData(localLinkData.cate, cloudLinkData.cate),
+          catelist: mergeCateLists(localLinkData.catelist, cloudLinkData.catelist),
+        };
+      }
+
+      const updated_at = new Date().toISOString();
+      const data = { link: mergedLinkData };
 
       if (existing && existing.length > 0) {
         await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
@@ -177,7 +186,7 @@ class CloudSync {
     }
   }
 
-  // ── 从 Supabase 下载并合并 ────────────────────────────────
+  // ── 从 Supabase 下载并合并到本地 ────────────────────────
   async download() {
     if (!this.isAuthenticated()) {
       toast.show('请先登录后再同步');
@@ -193,14 +202,15 @@ class CloudSync {
       );
 
       if (!rows || rows.length === 0) {
-        toast.show('云端暂无数据');
-        return { success: false, error: 'No data' };
+        toast.show('云端暂无数据，先上传本地数据');
+        // 云端无数据，直接上传本地数据
+        return await this.upload();
       }
 
       const cloudLinkData = rows[0].data?.link;
       if (!cloudLinkData) {
-        toast.show('云端无链接数据');
-        return { success: false, error: 'No link data' };
+        toast.show('云端无链接数据，先上传本地数据');
+        return await this.upload();
       }
 
       // 读取本地链接数据
@@ -214,15 +224,27 @@ class CloudSync {
       // 通过 link 模块的 setAll 写回（正确处理 IndexedDB）
       await new Promise((resolve) => {
         link.setAll(mergedLinks, mergedCate, () => {
-          // 更新 catelist
           const sto = gS('link');
           if (sto) sto.catelist = mergedCateList;
           resolve();
         });
       });
 
-      this.config.lastSync = rows[0].updated_at;
+      // 合并后上传回云端，确保云端也是最新合并数据
+      const updated_at = new Date().toISOString();
+      const data = { link: { links: mergedLinks, cate: mergedCate, catelist: mergedCateList } };
+      await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ data, updated_at }),
+      });
+
+      this.config.lastSync = updated_at;
       this.saveConfig();
+
+      // 触发 link 模块的 change 事件，让 UI 重新渲染
+      link.getCates && link.getCates(() => {});
+
       toast.show('同步成功，数据已合并 ✓');
       return { success: true };
 
