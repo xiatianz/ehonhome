@@ -44,6 +44,18 @@ async function sbFetch(path, options = {}) {
   }
 }
 
+// ── 兼容旧格式数据（之前上传的 {code:0,data:[...]} 包装对象）────
+function unwrapData(obj) {
+  if (!obj) return obj;
+  // 如果是数组，直接返回
+  if (Array.isArray(obj)) return obj;
+  // 如果是 {code:0, data:[...]} 包装对象，提取 .data
+  if (obj && typeof obj === 'object' && obj.data !== undefined && obj.code !== undefined) {
+    return obj.data;
+  }
+  return obj;
+}
+
 // ── 链接标识（用于去重和对比）──────────────────────────────
 function linkKey(l) {
   return l.title + '\x00' + l.url;
@@ -195,7 +207,10 @@ class CloudSync {
 
   // ── 收集本地链接数据（通过 link 模块的正确接口）──────
   async getLocalLinkData() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('读取本地数据超时'));
+      }, 10000);
       link.ready(() => {
         link.getCateAll((res) => {
           const cate = res.data || {};
@@ -203,6 +218,7 @@ class CloudSync {
             const links = res2.data || [];
             link.getCates((res3) => {
               const catelist = res3.data || [];
+              clearTimeout(timeout);
               resolve({ links, cate, catelist });
             });
           });
@@ -243,6 +259,12 @@ class CloudSync {
       );
       if (existing && existing.length > 0 && existing[0].data?.link) {
         cloudLinkData = existing[0].data.link;
+        // 兼容旧格式：解包 {code:0, data:[...]} 包装对象
+        cloudLinkData = {
+          links: unwrapData(cloudLinkData.links) || [],
+          cate: unwrapData(cloudLinkData.cate) || {},
+          catelist: unwrapData(cloudLinkData.catelist) || [],
+        };
       }
 
       // 基于快照智能合并
@@ -316,7 +338,15 @@ class CloudSync {
         return await this.upload();
       }
 
-      const cloudLinkData = rows[0].data?.link;
+      let cloudLinkData = rows[0].data?.link;
+      if (cloudLinkData) {
+        // 兼容旧格式：解包 {code:0, data:[...]} 包装对象
+        cloudLinkData = {
+          links: unwrapData(cloudLinkData.links) || [],
+          cate: unwrapData(cloudLinkData.cate) || {},
+          catelist: unwrapData(cloudLinkData.catelist) || [],
+        };
+      }
       if (!cloudLinkData) {
         toast.show('云端无链接数据，先上传本地数据');
         return await this.upload();

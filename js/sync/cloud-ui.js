@@ -164,10 +164,12 @@ function showLoginDialog() {
     if (result.success) {
       d.close();
       setTimeout(() => { d.destroy(); }, 300);
-      // 登录成功后开启自动同步
-      cloudSync.config.autoSync = true;
-      cloudSync.saveConfig();
-      refreshUI();
+      // 登录成功后先同步云端数据，再开启自动同步
+      cloudSync.download().catch(() => {}).finally(() => {
+        cloudSync.config.autoSync = true;
+        cloudSync.saveConfig();
+        refreshUI();
+      });
     } else {
       errorEl.textContent = result.error || '登录失败';
     }
@@ -214,10 +216,12 @@ function showLoginDialog() {
       } else {
         d.close();
         setTimeout(() => { d.destroy(); }, 300);
-        // 注册成功后开启自动同步
-        cloudSync.config.autoSync = true;
-        cloudSync.saveConfig();
-        refreshUI();
+        // 注册成功后先同步云端数据，再开启自动同步
+        cloudSync.download().catch(() => {}).finally(() => {
+          cloudSync.config.autoSync = true;
+          cloudSync.saveConfig();
+          refreshUI();
+        });
       }
     } else {
       errorEl.textContent = result.error || '注册失败';
@@ -459,10 +463,13 @@ storage.on('storage', () => {
 // ── 初始化：恢复登录状态 ──────────────────────────────────
 supabaseAuth.init().then((isAuth) => {
   refreshUI();
-  // 登录成功后开启自动同步（不自动下载，避免覆盖本地数据）
   if (isAuth) {
-    cloudSync.config.autoSync = true;
-    cloudSync.saveConfig();
+    // 登录后先从云端同步数据到本地，再开启自动同步
+    // 这样避免本地空数据覆盖云端
+    cloudSync.download().catch(() => {}).finally(() => {
+      cloudSync.config.autoSync = true;
+      cloudSync.saveConfig();
+    });
   }
 });
 
