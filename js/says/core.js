@@ -9,7 +9,7 @@ const addon =require('../addon');
 var initsto = storage('says', {
   sync: true,
   title: "一言",
-  desc: "QUIK起始页一言相关配置",
+  desc: "Ehon起始页一言相关配置",
   get: async () => {
     var a = initsto.getAll();
     var ra = addon.getAddonBySessionId(a.saytype);

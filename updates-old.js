@@ -3,7 +3,7 @@ var updatelog={
     updates:[
         {
             tag: "new",
-            content: "(Beta)QUIK起始页主题大更新！支持复选多个主题为页面添加不同主题的组合效果！"
+            content: "(Beta)Ehon起始页主题大更新！支持复选多个主题为页面添加不同主题的组合效果！"
         },
         {
             tag:"new",
@@ -69,7 +69,7 @@ var updatelog={
       },
       {
         tag: "fix",
-        content: "尝试修复quik.42web.io端中的更新以及强制更新可能会出现的崩溃问题"
+        content: "尝试修复home.ehon.cn端中的更新以及强制更新可能会出现的崩溃问题"
       },
       {
         tag: "new",
@@ -134,11 +134,11 @@ var updatelog={
       },
       {
         tag:"fix",
-        content:"修复在quik.42web.io更新时的问题"
+        content:"修复在home.ehon.cn更新时的问题"
       },
       {
         tag:"new",
-        content:"新增了QUIK问候功能，可在设置中设置"
+        content:"新增了Ehon问候功能，可在设置中设置"
       }
     ],
     time:"2025/2/1"
@@ -610,7 +610,7 @@ var updatelog={
         },
         {
           "tag":"thanks",
-          "content":"感谢所有使用和支持QUIK起始页的用户"
+          "content":"感谢所有使用和支持Ehon起始页的用户"
         },
         {
           "tag":"new",
@@ -898,11 +898,11 @@ var updatelog={
       "updates": [
         {
           "tag": "change",
-          "content": "修改QUIK起始页使用的图片相关API"
+          "content": "修改Ehon起始页使用的图片相关API"
         },
         {
           "tag": "change",
-          "content": "修改QUIK起始页使用的热榜相关API"
+          "content": "修改Ehon起始页使用的热榜相关API"
         }
       ],
       "time": "2023/8/22"

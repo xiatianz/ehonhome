@@ -6,7 +6,7 @@ const stp=gS("tuisong");
 if(isUd(stp.d))stp.d=0;
 var last_d = stp.d;
 console.log('last_d', last_d);
-get('/quik-notice.json').then(res => {
+get('/ehon-notice.json').then(res => {
     if (res.date > last_d) {
         setTimeout(() => {
             stp.d=res.date;

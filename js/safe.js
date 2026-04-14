@@ -63,7 +63,7 @@ gaoji.addNewItem(xnse);
 
 var clse = new SettingItem({
     title: "清除数据",
-    message: "清除QUIK起始页的所有数据",
+    message: "清除Ehon起始页的所有数据",
     index: 2,
     type: "null",
     callback() {
@@ -75,7 +75,7 @@ var clse = new SettingItem({
                             var k = storage('oobe')
                             var s = k.getAll(); 
                             // 保留oobe数据，这样清除后就不会再次显示欢迎界面
-                            localStorage.quik2 = JSON.stringify({
+                            localStorage.ehon = JSON.stringify({
                                 oobe: s
                             })
                             localforage.clear().then(() => {
@@ -95,13 +95,13 @@ gaoji.addNewItem(clse);
 
 var clse2 = new SettingItem({
     title: "还原设置",
-    message: "还原QUIK起始页的默认设置",
+    message: "还原Ehon起始页的默认设置",
     index: 2,
     type: "null",
     callback() {
         confirm('确定要还原设置为默认吗？', r => {
             if (r) {
-                let a=JSON.parse(localStorage.quik2);
+                let a=JSON.parse(localStorage.ehon);
                 a.setting={};
                 a.hello={};
                 delete a.link.draglink;
@@ -110,7 +110,7 @@ var clse2 = new SettingItem({
                 delete a.link.linkpailie;
                 delete a.link.linksize;
                 delete a.link.linkstyle;
-                localStorage.quik2 = JSON.stringify(a);
+                localStorage.ehon = JSON.stringify(a);
                 alert('已还原默认设置，刷新页面后生效。', function () {
                     window.location.reload();
                 })
@@ -128,12 +128,12 @@ var stol = new SettingItem({
     callback() {
         alert('该设置请在开发者指导下使用！', ()=> {
             prompt('如要清除整个库，输入1，如要清除具体键值，输入2，列出库列表输入3，列出键列表输入4', t => {
-                var a=JSON.parse(localStorage.quik2);
+                var a=JSON.parse(localStorage.ehon);
                 if (t=='1') {
                     prompt('输入要清除的库', k => {
                         if(k){
                             a[k]={};
-                            localStorage.quik2 = JSON.stringify(a);
+                            localStorage.ehon = JSON.stringify(a);
                             alert('已清除'+k+'库！', function () {
                                 window.location.reload();
                             })
@@ -149,7 +149,7 @@ var stol = new SettingItem({
                                     }catch(e){
                                         alert('该键值不存在！');
                                     }
-                                    localStorage.quik2 = JSON.stringify(a);
+                                    localStorage.ehon = JSON.stringify(a);
                                     alert('已清除'+k+'库的'+v+'键值！', function () {
                                         window.location.reload();
                                     })
@@ -200,12 +200,12 @@ var cjup = new SettingItem({
 
 var _i=0;
 function updateBySW(registration){
-    // quik.42web.io若在iframe中更新则无法通过cookie校验
-    if (window.isInframe && location.href.indexOf('://quik.42web.io/') != -1) {
+    // home.ehon.cn若在iframe中更新则无法通过cookie校验
+    if (window.isInframe && location.href.indexOf('://home.ehon.cn/') != -1) {
         alert('因安全原因，扩展程序无法进行强制更新，请在网页端更新', function () {
-            window.open('https://quik.42web.io/?forceUpdate=1');
+            window.open('https://home.ehon.cn/?forceUpdate=1');
         });
-    }else if(location.href.indexOf('://quik.42web.io/') != -1&&_i==0){
+    }else if(location.href.indexOf('://home.ehon.cn/') != -1&&_i==0){
         _i++;// 多次调用确保通过cookie校验
         var ifr = util.element('iframe', {
           src: './version',

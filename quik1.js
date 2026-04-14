@@ -2,28 +2,28 @@
     window.quik1to2(factory());
 })(function(){
     function helper(_importData){
-        quik.confirm('你确定要从QUIK1中导入数据吗？一些数据导入可能会不全。',function(ok){
+        quik.confirm('你确定要从Ehon1中导入数据吗？一些数据导入可能会不全。',function(ok){
             if(!ok)return;
             var d=new quik.dialog({
-                content:"正在获取QUIK 1数据...",
+                content:"正在获取Ehon 1数据...",
                 clickOtherToClose:false
             })
             setTimeout(function(){
                 d.open();
             },10)
             var ifr=util.element('iframe');
-            ifr.src='https://siquan001.github.io/quik/getdata.html?session=hhh';
+            ifr.src='https://home.ehon.cn/getdata.html?session=hhh';
             document.body.append(ifr);
             window.addEventListener('message',listen)
             function listen(e){
-                if(e.data.type=='rdata-quik1'){
+                if(e.data.type=='rdata-ehon1'){
                     if(e.data.data){
-                        var ret=quik1to2(JSON.parse(e.data.data));
+                        var ret=ehon1to2(JSON.parse(e.data.data));
                         d.close();
                         _importData(ret);
                     }else{
                         d.close();
-                        alert('未发现QUIK1数据，若数据在本地，请将数据导入QUIK1后再试')
+                        alert('未发现Ehon1数据，若数据在本地，请将数据导入Ehon1后再试')
                     }
                     
                 }
@@ -31,11 +31,11 @@
         })  
     }
 
-    function quik1to2(data){
-        var quik2mb={
+    function ehon1to2(data){
+        var ehon2mb={
             "setting": {
                 "title": "设置",
-                "desc": "QUIK起始页的各项设置",
+                "desc": "Ehon起始页的各项设置",
                 "data": {
                     "ob_justsearch": data.jusearch,
                     "ob_http": data.qhttps,
@@ -61,7 +61,7 @@
             },
             "link": {
                 "title": "链接",
-                "desc": "QUIK起始页链接数据",
+                "desc": "Ehon起始页链接数据",
                 "data": {
                     "linksize": ({'小':'s','中':'m','大':'l'})[data['settings']['通用']?data['settings']['通用']['ljdx']:'中'],
                     "links": (function(){
@@ -79,7 +79,7 @@
             },
             "says": {
                 "title": "一言",
-                "desc": "QUIK起始页一言相关配置",
+                "desc": "Ehon起始页一言相关配置",
                 "data": {
                     "usersay": data.says,
                     "saytype": (function(){
@@ -98,7 +98,7 @@
             },
             "background": {
                 "title": "背景",
-                "desc": "QUIK起始页背景相关配置",
+                "desc": "Ehon起始页背景相关配置",
                 "data": {
                     "bg": (function(){
                         var d;

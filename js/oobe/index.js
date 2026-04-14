@@ -40,7 +40,7 @@ if (!stp.agree) {
     }
     d.$('.part.a2 .item.c').onclick = () => {
         nextPart();
-        sync.openQUIK1();
+        sync.openEhon1();
     }
 
     function nextPart() {
@@ -67,14 +67,14 @@ function showguide() {
     if (!stp.guided) {
         guidecreator.create([
             {
-                text: "点击左下角的" + util.getGoogleIcon('e8b8', { type: "fill" }) + "就可以打开设置，你可以在设置里个性化你的QUIK起始页",
+                text: "点击左下角的" + util.getGoogleIcon('e8b8', { type: "fill" }) + "就可以打开设置，你可以在设置里个性化你的Ehon起始页",
                 offset: {
                     bottom: 40,
                     left: 0
                 }
             },
             {
-                text: "QUIK起始页提供插件来拓展QUIK起始页的功能，点击" + util.getGoogleIcon("e87b", { type: "fill" }) + "看看插件市场里是否有中意的吧",
+                text: "Ehon起始页提供插件来拓展Ehon起始页的功能，点击" + util.getGoogleIcon("e87b", { type: "fill" }) + "看看插件市场里是否有中意的吧",
                 offset: {
                     top: 40,
                     right: 40
@@ -95,7 +95,7 @@ function showguide() {
                 }
             },
             {
-                text: "开始使用QUIK起始页吧！",
+                text: "开始使用Ehon起始页吧！",
                 offset: {
                     bottom: window.innerHeight / 2 - 50,
                     right: window.innerWidth / 2 - 80

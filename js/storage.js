@@ -3,8 +3,8 @@ const getEventHandle = require("./event");
 const reactive = require("./reactive");
 const util = require("./util");
 
-if (!localStorage.quik2) {
-  localStorage.quik2 = '{}';
+if (!localStorage.ehon) {
+  localStorage.ehon = '{}';
 }
 
 
@@ -96,11 +96,11 @@ function doqueue() {
 var jl = {};
 
 // Use Proxy to rebuild
-const sto=JSON.parse(localStorage.quik2);
+const sto=JSON.parse(localStorage.ehon);
 
 const resto=reactive(sto,util.fangdou(function(){
     evn.doevent("storage",[]);
-    localStorage.quik2=JSON.stringify(sto);
+    localStorage.ehon=JSON.stringify(sto);
 },50));
 
 var f = function (ck, details) {
@@ -146,12 +146,12 @@ var f = function (ck, details) {
       }
     }
     // function getAll() {
-    //   return JSON.parse(localStorage.getItem("quik2"));
+    //   return JSON.parse(localStorage.getItem("ehon"));
     // }
     // function setAll(ob) {
     //   var a = getAll();
     //   a[ck] = ob;
-    //   localStorage.setItem("quik2", JSON.stringify(a));
+    //   localStorage.setItem("ehon", JSON.stringify(a));
     //   evn.doevent('storage', [{
     //     key: ck,
     //     value: ob

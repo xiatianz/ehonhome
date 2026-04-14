@@ -205,7 +205,7 @@ function drawExportDialog() {
       }
     })
     getJSON(op).then((res) => {
-      download(JSON.stringify(res), 'quik-2-exportdata.json');
+      download(JSON.stringify(res), 'ehon-exportdata.json');
     })
     exportDataDialog.close();
   }
@@ -256,14 +256,14 @@ function drawImportDialog() {
   }
 }
 
-var quik1si = new SettingItem({
-  title: "QUIK 1",
-  message: "从 QUIK 1 中导入数据",
+var ehon1si = new SettingItem({
+  title: "Ehon 1",
+  message: "从 Ehon 1 中导入数据",
   type: "null",
   callback: quik1
 })
 
-sg.addNewItem(quik1si);
+sg.addNewItem(ehon1si);
 
 
 module.exports = {
@@ -274,5 +274,5 @@ module.exports = {
   registerWebSync,
   unregister,
   isSync,
-  openQUIK1: quik1
+  openEhon1: quik1
 }

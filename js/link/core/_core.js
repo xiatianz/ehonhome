@@ -4,7 +4,7 @@ var getEventHandle=require('../../event');
 var initsto = storage('link', {
   sync: true,
   title:"链接",
-  desc:"QUIK起始页链接数据",
+  desc:"Ehon起始页链接数据",
   websync:true,
   get:async function(){
     var a=initsto.getAll();

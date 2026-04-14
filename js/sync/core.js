@@ -108,12 +108,12 @@ async function setJSON(json, config) {
 
   }
 
-  var o = JSON.parse(localStorage.quik2);
+  var o = JSON.parse(localStorage.ehon);
   for (var k in ast) {
     o[k] = ast[k];
   }
   setTimeout(()=>{
-    localStorage.quik2 = JSON.stringify(o);
+    localStorage.ehon = JSON.stringify(o);
     alert('数据导入成功，请重新加载页面', () => {
         if (location.hash.indexOf(';') != -1) {
           location.hash = location.hash.split(';')[0] + ';newnow'

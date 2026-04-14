@@ -11,7 +11,7 @@ var igsg = new SettingGroup({
 mainSetting.addNewGroup(igsg);
 var aboutSi = new SettingItem({
   type: 'null',
-  title: "关于QUIK起始页",
+  title: "关于Ehon起始页",
   index: 1,
   callback() {
     aboutDialog.open();
@@ -85,7 +85,7 @@ igsg.addNewItem(joinqqSi);
 
 mainmenu.pushMenu({
   icon: util.getGoogleIcon('e88e'),
-  title: "关于QUIK",
+  title: "关于Ehon",
   click() {
     aboutDialog.open();
   }
@@ -101,7 +101,7 @@ if (!window.isExt) {
     title: "浏览器扩展",
     click() {
       alert('浏览器扩展尚处于测试中，只支持chromium内核的浏览器（chrome,edge,360浏览器等），暂未上传至扩展商店，请下载crx后手动安装。', function () {
-        if (location.href.indexOf('quik.42web.io') != -1) {
+        if (location.href.indexOf('home.ehon.cn') != -1) {
           window.open('/intro/#h');
         } else {
           window.open('/#h');

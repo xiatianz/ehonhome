@@ -22,7 +22,7 @@ window.version = {
 if ('serviceWorker' in navigator && !window._dev) {
   navigator.serviceWorker.ready.then(registration => {
     window.swReg = registration;
-    if (window.location.href.indexOf('://quik.42web.io/') != -1) {
+    if (window.location.href.indexOf('://home.ehon.cn/') != -1) {
       var ifr = el('iframe', {
         src: './version',
         style: "opacity:0"
@@ -50,11 +50,11 @@ if ('serviceWorker' in navigator && !window._dev) {
         var nv = parseInt(r);
       }catch(e){}
       if (nv > version_code) {
-        if (window.isInframe && location.href.indexOf('://quik.42web.io/') != -1) {
+        if (window.isInframe && location.href.indexOf('://home.ehon.cn/') != -1) {
           alert('检测到新版本，安全原因无法在扩展中更新，即将打开新页面更新。', function () {
-            window.open('https://quik.42web.io/?update=1');
+            window.open('https://home.ehon.cn/?update=1');
           })
-        }else if(location.href.indexOf('://quik.42web.io/') != -1&&_i==0){
+        }else if(location.href.indexOf('://home.ehon.cn/') != -1&&_i==0){
           _i++;
           toast.show('发现新版本(版本序号：' + nv + ')，正在更新');
           var ifr = el('iframe', {

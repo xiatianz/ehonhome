@@ -1,4 +1,4 @@
-/* qui-core 1.1.0 MIT License author:siquan001 */
+/* qui-core 1.1.0 MIT License author:ehon */
 
 (function (e) {
     if (!window.qui) {
@@ -11,7 +11,7 @@
         about: {
             name: "qui-core",
             version: "1.2.0",
-            author: "siquan001",
+            author: "ehon",
             desc: "web开发辅助工具库"
         },
         initResize: function (fn = function () { }) {

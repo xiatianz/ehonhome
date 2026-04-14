@@ -1,7 +1,7 @@
 const omnibox=require('../omnibox');
 omnibox.on('beforeenter', (text) => {
-    if (text == 'rainbowcatXquik') {
-        localStorage.__quik_egg__ = '1';
+    if (text == 'rainbowcatXehon') {
+        localStorage.__ehon_egg__ = '1';
     }
 });
 
@@ -90,7 +90,7 @@ setTimeout(() => {
                     $(".loading-f p").html(m[d]);
                     a = setInterval(() => {
                         d = Math.floor(Math.random() * m.length);
-                        $(".loading-f p").html('QUIK 2.4.1 - 彩蛋 - RainbowCat ' + m[d]);
+                        $(".loading-f p").html('Ehon 起始页 - 彩蛋 - RainbowCat ' + m[d]);
                     }, 250)
                 }, 35000)
                 setTimeout(() => {

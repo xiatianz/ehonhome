@@ -5,8 +5,8 @@ const toast = require("../toast");
 
 storage('hello', {
     sync: true,
-    title: "QUIK问候",
-    desc: "QUIK问候配置文件"
+    title: "Ehon问候",
+    desc: "Ehon问候配置文件"
 });
 
 let stp=gS().hello;
@@ -87,8 +87,8 @@ var times = {
     noon: ["中午好！$0", "$1你是要来找电子榨菜吗？"],
     pm: ["下午好！$0"],
     night: ["晚上好！$0"],
-    midnight: ["已经很晚了哦$2，早点休息吧！", "不要在意他人的看法，你独一无二，你是你自己的一束光", "你的身体是为了你的一生服务的，而不是为了QUIK"],
-    ev: ["你好$2，我是天使", "不要在意他人的看法，你独一无二，你是你自己的一束光", "你的身体是为了你的一生服务的，而不是为了QUIK"]
+    midnight: ["已经很晚了哦$2，早点休息吧！", "不要在意他人的看法，你独一无二，你是你自己的一束光", "你的身体是为了你的一生服务的，而不是为了Ehon"],
+    ev: ["你好$2，我是天使", "不要在意他人的看法，你独一无二，你是你自己的一束光", "你的身体是为了你的一生服务的，而不是为了Ehon"]
 }
 
 function randomGet(arr) {
@@ -129,13 +129,13 @@ if (stp.enable) {
             if (res.code == 200) {
                 if (res.data.html.jiri) {
                     new notice({
-                        title: "QUIK问候",
+                        title: "Ehon问候",
                         content: "今天是" + (res.data.html.jiri == "春节" ? "春节！祝你新年快乐！" : res.data.html.jiri)
                     }).show()
                 }
                 if (res.data.html.jiqi) {
                     new notice({
-                        title: "QUIK问候",
+                        title: "Ehon问候",
                         content: "今天是" + res.data.html.jiqi
                     }).show()
                 }
