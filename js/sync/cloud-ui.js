@@ -1,4 +1,4 @@
-// 云端同步 UI 模块（无需登录）
+// 云端同步 UI 模块 - GitHub Gist 方案
 const { SettingGroup, SettingItem, mainSetting } = require('../setting/index');
 const { alert, confirm, prompt } = require('../dialog/dialog_utils');
 const cloudSync = require('./cloud');
@@ -6,165 +6,106 @@ const { pushMenu, MAIN_MENU_TOP } = require('../menu/mainmenu');
 const { icon } = require('../iconc');
 const util = require('../util');
 
-// 创建设置分组
-const cloudGroup = new SettingGroup({
-  title: '云端同步',
-  index: 6,
-});
+// ── 设置分组 ─────────────────────────────────────────────────
+const cloudGroup = new SettingGroup({ title: '云端同步 (GitHub Gist)', index: 6 });
 mainSetting.addNewGroup(cloudGroup);
 
-// 在右上角菜单添加云端同步按钮
+// ── 菜单按钮 ─────────────────────────────────────────────────
 function addCloudSyncToMenu() {
-  // 同步按钮图标
   const syncIcon = new icon({
     class: 'cloud_sync',
-    content: util.getGoogleIcon('e2bd'), // cloud_sync 图标
+    content: util.getGoogleIcon('e2bd'),
     offset: 'tr'
   });
-  
-  // 点击直接同步
+
   syncIcon.getIcon().onclick = e => {
     e.stopPropagation();
-    if (cloudSync.isEnabled()) {
-      // 已启用，直接上传
+    if (cloudSync.hasToken()) {
       cloudSync.upload();
     } else {
-      // 未启用，提示启用
-      alert('请先启用云端同步功能');
+      alert('请先在 设置 → 云端同步 中填写 GitHub Token');
     }
   };
-  
-  // 添加到右上角菜单
+
   pushMenu({
-    title: cloudSync.isEnabled() ? '☁️ 同步到云端' : '☁️ 启用云端同步',
+    title: '☁️ 同步到 Gist',
     icon: util.getGoogleIcon('e2bd'),
     callback: () => {
-      if (cloudSync.isEnabled()) {
+      if (cloudSync.hasToken()) {
         cloudSync.upload();
       } else {
-        confirm('是否启用云端同步功能？', ok => {
-          if (ok) {
-            cloudSync.enable();
-            updateMenuUI();
-            alert('云端同步已启用！');
-          }
-        });
+        alert('请先在 设置 → 云端同步 中填写 GitHub Token');
       }
     }
   }, MAIN_MENU_TOP);
 }
-
-// 更新菜单状态
-function updateMenuUI() {
-  // 重新加载页面以更新菜单
-  location.reload();
-}
-
-// 初始化菜单
 setTimeout(addCloudSyncToMenu, 200);
 
-// 同步状态显示
-const syncStatusItem = new SettingItem({
+// ── Token 设置 ───────────────────────────────────────────────
+const tokenItem = new SettingItem({
   type: 'null',
-  title: '同步状态',
+  title: 'GitHub Token',
+  message: '设置 Personal Access Token（需要 gist 权限）',
   index: 1,
   get() {
-    if (cloudSync.isEnabled()) {
-      return '已启用';
-    }
-    return '未启用';
+    const t = cloudSync.getToken();
+    if (!t) return '未设置';
+    return t.slice(0, 8) + '••••••••' + t.slice(-4);
   },
-});
-
-// 启用/禁用同步
-const toggleSyncItem = new SettingItem({
-  type: 'null',
-  title: '启用云端同步',
-  message: '开启后可将数据备份到云端',
-  index: 2,
   callback() {
-    if (cloudSync.isEnabled()) {
-      confirm('确定要禁用云端同步吗？本地数据不会丢失。', ok => {
-        if (ok) {
-          cloudSync.disable();
-          syncStatusItem.reGet();
-          updateUI();
-          alert('云端同步已禁用');
+    const current = cloudSync.getToken();
+    prompt(
+      '请输入 GitHub Personal Access Token\n（在 GitHub → Settings → Developer settings → Personal access tokens 中创建，需勾选 gist 权限）',
+      current,
+      token => {
+        if (token === null) return;
+        if (!token.trim()) {
+          confirm('确定要清除 Token 吗？', ok => {
+            if (ok) {
+              cloudSync.disable();
+              tokenItem.reGet();
+              gistIdItem.reGet();
+              updateUI();
+            }
+          });
+          return;
         }
-      });
-    } else {
-      cloudSync.enable();
-      syncStatusItem.reGet();
-      updateUI();
-      alert('云端同步已启用！');
-    }
+        cloudSync.setToken(token);
+        tokenItem.reGet();
+        updateUI();
+        alert('Token 已保存！现在可以点击"上传到云端"进行同步。');
+      }
+    );
   },
 });
 
-// 上传数据
+// ── 上传 ─────────────────────────────────────────────────────
 const uploadItem = new SettingItem({
   type: 'null',
   title: '上传到云端',
-  message: '将本地数据备份到云端',
-  index: 3,
+  message: '将本地数据备份到 GitHub Gist',
+  index: 2,
   callback() {
-    cloudSync.upload();
+    cloudSync.upload().then(() => {
+      gistIdItem.reGet();
+      lastSyncItem.reGet();
+    });
   },
 });
 
-// 下载数据
+// ── 下载 ─────────────────────────────────────────────────────
 const downloadItem = new SettingItem({
   type: 'null',
   title: '从云端下载',
-  message: '从云端恢复数据到本地',
-  index: 4,
+  message: '从 GitHub Gist 恢复数据到本地',
+  index: 3,
   callback() {
     confirm('下载云端数据将覆盖本地数据，确定继续吗？', ok => {
       if (ok) {
-        cloudSync.download().then(() => {
-          alert('数据已同步，请刷新页面以应用更改');
-        });
-      }
-    });
-  },
-});
-
-// 设备 ID 管理
-const deviceIdItem = new SettingItem({
-  type: 'null',
-  title: '设备 ID',
-  message: '用于多设备同步，点击复制',
-  index: 5,
-  get() {
-    const id = cloudSync.getCurrentDeviceId();
-    return id.substring(0, 20) + '...';
-  },
-  callback() {
-    const deviceId = cloudSync.getCurrentDeviceId();
-    // 复制到剪贴板
-    navigator.clipboard.writeText(deviceId).then(() => {
-      alert('设备 ID 已复制到剪贴板');
-    }).catch(() => {
-      prompt('设备 ID（请手动复制）：', deviceId);
-    });
-  },
-});
-
-// 导入设备 ID（从其他设备同步）
-const importDeviceItem = new SettingItem({
-  type: 'null',
-  title: '导入设备数据',
-  message: '输入其他设备的 ID 以同步其数据',
-  index: 6,
-  callback() {
-    prompt('请输入其他设备的 ID：', '', deviceId => {
-      if (deviceId && deviceId.trim()) {
-        confirm('确定要导入该设备的数据吗？这将覆盖本地数据。', ok => {
-          if (ok) {
-            cloudSync.setDeviceId(deviceId.trim());
-            cloudSync.download().then(() => {
-              alert('数据已导入，请刷新页面以应用更改');
-            });
+        cloudSync.download().then(res => {
+          if (res.success) {
+            lastSyncItem.reGet();
+            alert('数据已同步，请刷新页面以应用更改');
           }
         });
       }
@@ -172,72 +113,106 @@ const importDeviceItem = new SettingItem({
   },
 });
 
-// 自动同步开关
+// ── Gist ID（上传后自动填充，也可手动输入以同步其他设备数据）──
+const gistIdItem = new SettingItem({
+  type: 'null',
+  title: 'Gist ID',
+  message: '上传后自动保存；也可输入他人 Gist ID 下载其数据',
+  index: 4,
+  get() {
+    const id = cloudSync.getGistId();
+    return id ? id.slice(0, 12) + '...' : '尚未同步';
+  },
+  callback() {
+    const current = cloudSync.getGistId();
+    prompt(
+      '当前 Gist ID（可修改为其他设备的 Gist ID 以同步其数据）：',
+      current,
+      id => {
+        if (id === null) return;
+        if (id.trim()) {
+          cloudSync.setGistId(id.trim());
+          gistIdItem.reGet();
+          alert('Gist ID 已更新，点击"从云端下载"即可同步数据');
+        }
+      }
+    );
+  },
+});
+
+// ── 复制 Gist ID（分享给其他设备使用）───────────────────────
+const copyGistIdItem = new SettingItem({
+  type: 'null',
+  title: '复制 Gist ID',
+  message: '将此 ID 填入其他设备即可同步',
+  index: 5,
+  callback() {
+    const id = cloudSync.getGistId();
+    if (!id) {
+      alert('请先上传一次数据以获取 Gist ID');
+      return;
+    }
+    navigator.clipboard.writeText(id).then(() => {
+      alert('Gist ID 已复制：' + id);
+    }).catch(() => {
+      prompt('请手动复制此 Gist ID：', id);
+    });
+  },
+});
+
+// ── 自动同步 ─────────────────────────────────────────────────
 const autoSyncItem = new SettingItem({
   type: 'boolean',
   title: '自动同步',
   message: '数据变更时自动上传到云端',
-  index: 7,
-  get() {
-    return cloudSync.config.autoSync;
-  },
+  index: 6,
+  get()    { return cloudSync.config.autoSync; },
   callback(v) {
     cloudSync.config.autoSync = v;
     cloudSync.saveConfig();
   },
 });
 
-// 上次同步时间
+// ── 上次同步时间 ──────────────────────────────────────────────
 const lastSyncItem = new SettingItem({
   type: 'null',
   title: '上次同步',
-  index: 8,
+  index: 7,
   get() {
-    const lastSync = cloudSync.getLastSyncTime();
-    if (lastSync) {
-      const date = new Date(lastSync);
-      return date.toLocaleString('zh-CN');
-    }
-    return '从未同步';
+    const t = cloudSync.getLastSyncTime();
+    return t ? new Date(t).toLocaleString('zh-CN') : '从未同步';
   },
 });
 
-// 添加所有设置项到分组
-cloudGroup.addNewItem(syncStatusItem);
-cloudGroup.addNewItem(toggleSyncItem);
+// ── 添加到分组 ────────────────────────────────────────────────
+cloudGroup.addNewItem(tokenItem);
 cloudGroup.addNewItem(uploadItem);
 cloudGroup.addNewItem(downloadItem);
-cloudGroup.addNewItem(deviceIdItem);
-cloudGroup.addNewItem(importDeviceItem);
+cloudGroup.addNewItem(gistIdItem);
+cloudGroup.addNewItem(copyGistIdItem);
 cloudGroup.addNewItem(autoSyncItem);
 cloudGroup.addNewItem(lastSyncItem);
 
-// 根据同步状态显示/隐藏相关项
+// ── 根据 Token 状态显示/隐藏操作项 ───────────────────────────
 function updateUI() {
-  if (cloudSync.isEnabled()) {
-    toggleSyncItem.title = '禁用云端同步';
-    toggleSyncItem.message = '点击禁用云端同步功能';
+  const hasToken = cloudSync.hasToken();
+  if (hasToken) {
     uploadItem.show();
     downloadItem.show();
-    deviceIdItem.show();
-    importDeviceItem.show();
+    gistIdItem.show();
+    copyGistIdItem.show();
     autoSyncItem.show();
     lastSyncItem.show();
   } else {
-    toggleSyncItem.title = '启用云端同步';
-    toggleSyncItem.message = '开启后可将数据备份到云端';
     uploadItem.hide();
     downloadItem.hide();
-    deviceIdItem.hide();
-    importDeviceItem.hide();
+    gistIdItem.hide();
+    copyGistIdItem.hide();
     autoSyncItem.hide();
     lastSyncItem.hide();
   }
 }
 
-// 初始化 UI
 setTimeout(updateUI, 100);
 
-module.exports = {
-  updateUI,
-};
+module.exports = { updateUI };
