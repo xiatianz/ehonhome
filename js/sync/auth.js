@@ -171,9 +171,12 @@ class SupabaseAuth {
 
   // ── GitHub OAuth 登录 ────────────────────────────────────
   signInWithGitHub() {
-    // Supabase OAuth: 重定向到 Supabase 的 OAuth 端点
-    // 回调后会跳转到 redirect_to 并在 URL hash 中携带 token
-    const redirectTo = `${window.location.origin}/oauth-callback.html`;
+    // Supabase OAuth 流程：
+    // 1. 重定向到 Supabase 的 /auth/v1/authorize 端点
+    // 2. Supabase 回调到自己的 /auth/v1/callback
+    // 3. Supabase 重定向到 redirect_to，在 URL hash 中携带 token
+    // redirect_to 必须在 Supabase Dashboard → Authentication → Redirect URLs 中配置
+    const redirectTo = window.location.origin + window.location.pathname;
     const url = `${SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(redirectTo)}`;
     window.location.href = url;
   }
@@ -187,8 +190,19 @@ class SupabaseAuth {
     const access_token = params.get('access_token');
     if (!access_token) return false;
     
+    // 检查是否有错误
+    const error = params.get('error');
+    const error_description = params.get('error_description');
+    if (error) {
+      toast.show('登录失败: ' + (error_description || error));
+      this._cleanHash();
+      return false;
+    }
+    
     const refresh_token = params.get('refresh_token');
     const expires_in = params.get('expires_in');
+    const expires_at = params.get('expires_at');
+    const type = params.get('type'); // 'signup' | 'recovery' | etc.
     
     // 解析 JWT 获取用户信息
     let user = null;
@@ -200,6 +214,8 @@ class SupabaseAuth {
         email: decoded.email || '',
         aud: decoded.aud,
         role: decoded.role,
+        user_metadata: decoded.user_metadata || {},
+        app_metadata: decoded.app_metadata || {},
       };
     } catch (e) {
       console.error('[Auth] Parse token error:', e);
@@ -208,18 +224,31 @@ class SupabaseAuth {
     const session = {
       access_token,
       refresh_token,
-      expires_at: Math.floor(Date.now() / 1000) + parseInt(expires_in || 3600),
+      expires_at: expires_at ? parseInt(expires_at) : Math.floor(Date.now() / 1000) + parseInt(expires_in || 3600),
+      token_type: params.get('token_type') || 'bearer',
       user,
     };
     
     this._saveSession(session);
     
     // 清除 URL hash，避免 token 暴露在地址栏
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    this._cleanHash();
+    
+    // 显示提示
+    if (type === 'recovery') {
+      toast.show('密码重置验证成功 ✓');
+    } else {
+      toast.show('GitHub 登录成功 ✓');
     }
     
     return true;
+  }
+
+  // ── 清除 URL hash ────────────────────────────────────────
+  _cleanHash() {
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   }
 
   // ── 登出 ──────────────────────────────────────────────────
