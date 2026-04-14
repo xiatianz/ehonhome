@@ -65,10 +65,6 @@
       const params = new URLSearchParams(hash);
       
       const access_token = params.get('access_token');
-      const refresh_token = params.get('refresh_token');
-      const expires_in = params.get('expires_in');
-      const token_type = params.get('token_type');
-      const type = params.get('type'); // 'signup' | 'recovery' | etc.
       const error = params.get('error');
       const error_description = params.get('error_description');
       
@@ -87,6 +83,9 @@
       }
       
       // 解析 JWT 获取用户信息
+      const refresh_token = params.get('refresh_token');
+      const expires_in = params.get('expires_in');
+      const type = params.get('type');
       let user = null;
       try {
         const payload = access_token.split('.')[1];
@@ -96,17 +95,19 @@
           email: decoded.email || '',
           aud: decoded.aud,
           role: decoded.role,
+          user_metadata: decoded.user_metadata || {},
+          app_metadata: decoded.app_metadata || {},
         };
       } catch (e) {
         console.error('Parse token error:', e);
       }
       
-      // 构建 session 并保存到 localStorage
+      // 构建 session 并保存到 localStorage（与 auth.js 的 _saveSession 一致）
       const session = {
         access_token,
         refresh_token,
         expires_at: Math.floor(Date.now() / 1000) + parseInt(expires_in || 3600),
-        token_type: token_type || 'bearer',
+        token_type: params.get('token_type') || 'bearer',
         user,
       };
       
