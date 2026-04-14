@@ -1,6 +1,6 @@
-// 云端同步 UI 模块
+// 云端同步 UI 模块（无需登录）
 const { SettingGroup, SettingItem, mainSetting } = require('../setting/index');
-const { alert, confirm } = require('../dialog/dialog_utils');
+const { alert, confirm, prompt } = require('../dialog/dialog_utils');
 const cloudSync = require('./cloud');
 const { pushMenu, MAIN_MENU_TOP } = require('../menu/mainmenu');
 const { icon } = require('../iconc');
@@ -25,37 +25,29 @@ function addCloudSyncToMenu() {
   // 点击直接同步
   syncIcon.getIcon().onclick = e => {
     e.stopPropagation();
-    if (cloudSync.isLoggedIn()) {
-      // 已登录，直接上传
+    if (cloudSync.isEnabled()) {
+      // 已启用，直接上传
       cloudSync.upload();
     } else {
-      // 未登录，打开登录
-      cloudSync.loginWithGitHub().then(result => {
-        if (result.success) {
-          updateMenuUI();
-          alert('登录成功！');
-        }
-      }).catch(error => {
-        alert('登录失败: ' + error.message);
-      });
+      // 未启用，提示启用
+      alert('请先启用云端同步功能');
     }
   };
   
-  // 添加到右上角菜单（只在顶部添加一个同步按钮）
+  // 添加到右上角菜单
   pushMenu({
-    title: cloudSync.isLoggedIn() ? '☁️ 同步到云端' : '☁️ 登录并同步',
+    title: cloudSync.isEnabled() ? '☁️ 同步到云端' : '☁️ 启用云端同步',
     icon: util.getGoogleIcon('e2bd'),
     callback: () => {
-      if (cloudSync.isLoggedIn()) {
+      if (cloudSync.isEnabled()) {
         cloudSync.upload();
       } else {
-        cloudSync.loginWithGitHub().then(result => {
-          if (result.success) {
+        confirm('是否启用云端同步功能？', ok => {
+          if (ok) {
+            cloudSync.enable();
             updateMenuUI();
-            alert('登录成功！');
+            alert('云端同步已启用！');
           }
-        }).catch(error => {
-          alert('登录失败: ' + error.message);
         });
       }
     }
@@ -71,59 +63,41 @@ function updateMenuUI() {
 // 初始化菜单
 setTimeout(addCloudSyncToMenu, 200);
 
-// 登录状态显示
-const loginStatusItem = new SettingItem({
+// 同步状态显示
+const syncStatusItem = new SettingItem({
   type: 'null',
-  title: '登录状态',
+  title: '同步状态',
   index: 1,
   get() {
-    if (cloudSync.isLoggedIn()) {
-      const user = cloudSync.getUser();
-      return user ? `已登录: ${user.login}` : '已登录';
+    if (cloudSync.isEnabled()) {
+      return '已启用';
     }
-    return '未登录';
+    return '未启用';
   },
 });
 
-// GitHub 登录
-const loginItem = new SettingItem({
+// 启用/禁用同步
+const toggleSyncItem = new SettingItem({
   type: 'null',
-  title: 'GitHub 登录',
-  message: '使用 GitHub 账号登录以启用云端同步',
+  title: '启用云端同步',
+  message: '开启后可将数据备份到云端',
   index: 2,
   callback() {
-    cloudSync.loginWithGitHub().then(result => {
-      if (result.success) {
-        loginStatusItem.reGet();
-        logoutItem.show();
-        loginItem.hide();
-        uploadItem.show();
-        downloadItem.show();
-        alert('登录成功！');
-      }
-    }).catch(error => {
-      alert('登录失败: ' + error.message);
-    });
-  },
-});
-
-// 退出登录
-const logoutItem = new SettingItem({
-  type: 'null',
-  title: '退出登录',
-  message: '退出当前账号',
-  index: 3,
-  callback() {
-    confirm('确定要退出登录吗？本地数据不会丢失。', ok => {
-      if (ok) {
-        cloudSync.logout();
-        loginStatusItem.reGet();
-        logoutItem.hide();
-        loginItem.show();
-        uploadItem.hide();
-        downloadItem.hide();
-      }
-    });
+    if (cloudSync.isEnabled()) {
+      confirm('确定要禁用云端同步吗？本地数据不会丢失。', ok => {
+        if (ok) {
+          cloudSync.disable();
+          syncStatusItem.reGet();
+          updateUI();
+          alert('云端同步已禁用');
+        }
+      });
+    } else {
+      cloudSync.enable();
+      syncStatusItem.reGet();
+      updateUI();
+      alert('云端同步已启用！');
+    }
   },
 });
 
@@ -132,7 +106,7 @@ const uploadItem = new SettingItem({
   type: 'null',
   title: '上传到云端',
   message: '将本地数据备份到云端',
-  index: 4,
+  index: 3,
   callback() {
     cloudSync.upload();
   },
@@ -143,7 +117,7 @@ const downloadItem = new SettingItem({
   type: 'null',
   title: '从云端下载',
   message: '从云端恢复数据到本地',
-  index: 5,
+  index: 4,
   callback() {
     confirm('下载云端数据将覆盖本地数据，确定继续吗？', ok => {
       if (ok) {
@@ -155,12 +129,55 @@ const downloadItem = new SettingItem({
   },
 });
 
+// 设备 ID 管理
+const deviceIdItem = new SettingItem({
+  type: 'null',
+  title: '设备 ID',
+  message: '用于多设备同步，点击复制',
+  index: 5,
+  get() {
+    const id = cloudSync.getDeviceId();
+    return id.substring(0, 20) + '...';
+  },
+  callback() {
+    const deviceId = cloudSync.getDeviceId();
+    // 复制到剪贴板
+    navigator.clipboard.writeText(deviceId).then(() => {
+      alert('设备 ID 已复制到剪贴板');
+    }).catch(() => {
+      prompt('设备 ID（请手动复制）：', deviceId);
+    });
+  },
+});
+
+// 导入设备 ID（从其他设备同步）
+const importDeviceItem = new SettingItem({
+  type: 'null',
+  title: '导入设备数据',
+  message: '输入其他设备的 ID 以同步其数据',
+  index: 6,
+  callback() {
+    prompt('请输入其他设备的 ID：', '', deviceId => {
+      if (deviceId && deviceId.trim()) {
+        confirm('确定要导入该设备的数据吗？这将覆盖本地数据。', ok => {
+          if (ok) {
+            cloudSync.setDeviceId(deviceId.trim());
+            cloudSync.download().then(() => {
+              alert('数据已导入，请刷新页面以应用更改');
+            });
+          }
+        });
+      }
+    });
+  },
+});
+
 // 自动同步开关
 const autoSyncItem = new SettingItem({
   type: 'boolean',
   title: '自动同步',
   message: '数据变更时自动上传到云端',
-  index: 6,
+  index: 7,
   get() {
     return cloudSync.config.autoSync;
   },
@@ -174,7 +191,7 @@ const autoSyncItem = new SettingItem({
 const lastSyncItem = new SettingItem({
   type: 'null',
   title: '上次同步',
-  index: 7,
+  index: 8,
   get() {
     const lastSync = cloudSync.getLastSyncTime();
     if (lastSync) {
@@ -186,26 +203,35 @@ const lastSyncItem = new SettingItem({
 });
 
 // 添加所有设置项到分组
-cloudGroup.addNewItem(loginStatusItem);
-cloudGroup.addNewItem(loginItem);
-cloudGroup.addNewItem(logoutItem);
+cloudGroup.addNewItem(syncStatusItem);
+cloudGroup.addNewItem(toggleSyncItem);
 cloudGroup.addNewItem(uploadItem);
 cloudGroup.addNewItem(downloadItem);
+cloudGroup.addNewItem(deviceIdItem);
+cloudGroup.addNewItem(importDeviceItem);
 cloudGroup.addNewItem(autoSyncItem);
 cloudGroup.addNewItem(lastSyncItem);
 
-// 根据登录状态显示/隐藏相关项
+// 根据同步状态显示/隐藏相关项
 function updateUI() {
-  if (cloudSync.isLoggedIn()) {
-    loginItem.hide();
-    logoutItem.show();
+  if (cloudSync.isEnabled()) {
+    toggleSyncItem.title = '禁用云端同步';
+    toggleSyncItem.message = '点击禁用云端同步功能';
     uploadItem.show();
     downloadItem.show();
+    deviceIdItem.show();
+    importDeviceItem.show();
+    autoSyncItem.show();
+    lastSyncItem.show();
   } else {
-    loginItem.show();
-    logoutItem.hide();
+    toggleSyncItem.title = '启用云端同步';
+    toggleSyncItem.message = '开启后可将数据备份到云端';
     uploadItem.hide();
     downloadItem.hide();
+    deviceIdItem.hide();
+    importDeviceItem.hide();
+    autoSyncItem.hide();
+    lastSyncItem.hide();
   }
 }
 

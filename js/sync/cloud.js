@@ -1,13 +1,27 @@
-// 云端同步模块 - EdgeOne Pages KV
+// 云端同步模块 - EdgeOne Pages KV（无需登录）
 const { gS } = require('../storage');
 const toast = require('../toast');
 
 const API_BASE = ''; // 同域部署，使用相对路径
 const SYNC_KEY = 'cloud_sync_config';
+const DEVICE_ID_KEY = 'cloud_device_id';
 
 class CloudSync {
   constructor() {
     this.config = this.loadConfig();
+    this.deviceId = this.getDeviceId();
+  }
+  
+  // 生成或获取设备 ID
+  getDeviceId() {
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      // 生成随机设备 ID
+      deviceId = 'device_' + Math.random().toString(36).substring(2, 15) + 
+                 Math.random().toString(36).substring(2, 15);
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
   }
   
   // 加载同步配置
@@ -15,8 +29,6 @@ class CloudSync {
     const sto = gS('sync');
     return sto.config || {
       enabled: false,
-      token: null,
-      user: null,
       lastSync: null,
       autoSync: false,
     };
@@ -28,80 +40,30 @@ class CloudSync {
     sto.config = this.config;
   }
   
-  // 检查是否已登录
-  isLoggedIn() {
-    return !!this.config.token;
+  // 检查是否已启用同步
+  isEnabled() {
+    return this.config.enabled;
   }
   
-  // 获取用户信息
-  getUser() {
-    return this.config.user;
-  }
-  
-  // GitHub OAuth 登录
-  async loginWithGitHub() {
-    try {
-      // 第一步：获取 GitHub 授权 URL
-      const apiUrl = `${API_BASE}/api/auth/github`;
-      console.log('Fetching auth URL from:', apiUrl);
-      
-      const response = await fetch(apiUrl);
-      const data = await response.json();
-      
-      console.log('Auth response:', data);
-      
-      // 如果需要授权，跳转到 GitHub
-      if (data.needAuth && data.authUrl) {
-        // 在当前窗口打开授权页面
-        window.location.href = data.authUrl;
-        return { success: false, needAuth: true };
-      }
-      
-      // 监听消息
-      return new Promise((resolve, reject) => {
-        const messageHandler = (event) => {
-          if (event.origin !== window.location.origin) return;
-          
-          if (event.data.type === 'oauth-success') {
-            window.removeEventListener('message', messageHandler);
-            this.config.token = event.data.token;
-            this.config.user = event.data.user;
-            this.saveConfig();
-            resolve({ success: true, user: event.data.user });
-          } else if (event.data.type === 'oauth-error') {
-            window.removeEventListener('message', messageHandler);
-            reject(new Error(event.data.message));
-          }
-        };
-        
-        window.addEventListener('message', messageHandler);
-        
-        // 超时处理
-        setTimeout(() => {
-          window.removeEventListener('message', messageHandler);
-          reject(new Error('登录超时'));
-        }, 120000);
-      });
-    } catch (error) {
-      toast.show('登录失败: ' + error.message);
-      throw error;
-    }
-  }
-  
-  // 退出登录
-  logout() {
-    this.config.token = null;
-    this.config.user = null;
-    this.config.lastSync = null;
+  // 启用同步
+  enable() {
+    this.config.enabled = true;
     this.saveConfig();
-    toast.show('已退出登录');
+    toast.show('云端同步已启用');
+  }
+  
+  // 禁用同步
+  disable() {
+    this.config.enabled = false;
+    this.saveConfig();
+    toast.show('云端同步已禁用');
   }
   
   // 上传数据到云端
   async upload() {
-    if (!this.isLoggedIn()) {
-      toast.show('请先登录');
-      return { success: false, error: 'Not logged in' };
+    if (!this.isEnabled()) {
+      toast.show('请先启用云端同步');
+      return { success: false, error: 'Sync not enabled' };
     }
     
     try {
@@ -112,7 +74,7 @@ class CloudSync {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.token}`,
+          'X-Device-ID': this.deviceId,
         },
         body: JSON.stringify(localData),
       });
@@ -136,16 +98,16 @@ class CloudSync {
   
   // 从云端下载数据
   async download() {
-    if (!this.isLoggedIn()) {
-      toast.show('请先登录');
-      return { success: false, error: 'Not logged in' };
+    if (!this.isEnabled()) {
+      toast.show('请先启用云端同步');
+      return { success: false, error: 'Sync not enabled' };
     }
     
     try {
       const response = await fetch(`${API_BASE}/api/sync`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.config.token}`,
+          'X-Device-ID': this.deviceId,
         },
       });
       
@@ -210,7 +172,7 @@ class CloudSync {
   
   // 自动同步（如果开启）
   async autoSync() {
-    if (this.config.autoSync && this.isLoggedIn()) {
+    if (this.config.autoSync && this.isEnabled()) {
       return await this.upload();
     }
   }
@@ -218,6 +180,18 @@ class CloudSync {
   // 获取上次同步时间
   getLastSyncTime() {
     return this.config.lastSync;
+  }
+  
+  // 获取设备 ID（用于在其他设备上同步）
+  getDeviceId() {
+    return this.deviceId;
+  }
+  
+  // 设置设备 ID（从其他设备同步数据）
+  setDeviceId(deviceId) {
+    this.deviceId = deviceId;
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    this.saveConfig();
   }
 }
 
