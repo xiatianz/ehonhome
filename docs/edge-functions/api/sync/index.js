@@ -18,11 +18,23 @@ export default async function onRequest(context) {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 诊断：检查 KV 绑定是否存在
+  // 诊断：检查 KV 绑定是否存在且有效
   if (typeof ehon_kv === 'undefined') {
     return new Response(JSON.stringify({
       error: 'KV not bound',
       message: 'ehon_kv is not defined. Please bind the KV namespace (ehon_data) to this project in EdgeOne Pages console.',
+    }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  // 检查 KV 对象是否有有效方法
+  if (typeof ehon_kv.put !== 'function' || typeof ehon_kv.get !== 'function') {
+    return new Response(JSON.stringify({
+      error: 'KV invalid',
+      message: 'ehon_kv exists but put/get methods are missing',
+      kvType: typeof ehon_kv,
+      kvKeys: Object.keys(ehon_kv || {}),
     }), {
       status: 503,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -91,6 +103,8 @@ export default async function onRequest(context) {
     return new Response(JSON.stringify({
       error: 'Internal server error',
       message: error.message,
+      stack: error.stack,
+      name: error.name,
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
