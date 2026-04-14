@@ -310,8 +310,11 @@ class SupabaseAuth {
       this.currentUser = user;
       return user;
     } catch (error) {
-      // Token 可能已过期
-      this._clearSession();
+      // 网络错误不清除 session（可能是 SW 拦截或临时断网）
+      // 只有 401/403 等认证错误才清除
+      if (error.message && (error.message.includes('401') || error.message.includes('403') || error.message.includes('JWT'))) {
+        this._clearSession();
+      }
       return null;
     }
   }
@@ -419,12 +422,13 @@ class SupabaseAuth {
 
     // 尝试从 localStorage 恢复 session
     if (this._loadSession()) {
-      // 验证 session 是否仍然有效
-      const user = await this.getCurrentUser();
-      if (!user) {
-        // Session 无效，尝试刷新
-        await this.refreshSession();
-      }
+      // 验证 session 是否仍然有效（异步，不阻塞初始化）
+      this.getCurrentUser().then(user => {
+        if (!user) {
+          // 验证失败，尝试用 refresh_token 刷新
+          this.refreshSession();
+        }
+      });
     }
     
     return this.isAuthenticated();
@@ -444,7 +448,9 @@ class SupabaseAuth {
   }
 
   getEmail() {
-    return this.currentUser?.email || null;
+    if (!this.currentUser) return null;
+    // 优先显示 email，GitHub 用户可能没有 email 则显示用户名
+    return this.currentUser.email || this.currentUser.user_metadata?.preferred_username || this.currentUser.user_metadata?.full_name || this.currentUser.user_metadata?.name || '已登录';
   }
 
   getAccessToken() {
