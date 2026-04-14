@@ -5,6 +5,9 @@ var { getJSON, setJSON } = require('./core.js');
 var { registerWebSync, unregister, isSync } = require('./web.js');
 const { getStorageList } = require("../storage");
 
+// 加载云端同步模块
+require('./cloud-ui');
+
 function quik1() {
   var d = new dialog({
       content: "正在加载模块..."
