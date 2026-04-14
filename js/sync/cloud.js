@@ -1,5 +1,6 @@
 // 云端同步模块 - Supabase Auth（基于用户登录）
 // 只同步链接数据，使用 link 模块的正确接口读写 IndexedDB
+// 支持增删同步：通过快照对比计算本地增删，应用到云端
 const { gS } = require('../storage');
 const toast = require('../toast');
 const supabaseAuth = require('./auth');
@@ -43,44 +44,126 @@ async function sbFetch(path, options = {}) {
   }
 }
 
-// ── 链接去重合并 ──────────────────────────────────────────
-// 基于 title+url 去重，保留两端的链接
-function mergeLinkArrays(local, cloud) {
-  if (!cloud || !Array.isArray(cloud)) return local;
-  if (!local || !Array.isArray(local)) return cloud;
-  const merged = [...local];
-  for (const cl of cloud) {
-    const exists = merged.find(l => l.title === cl.title && l.url === cl.url);
-    if (!exists) merged.push(cl);
-  }
-  return merged;
+// ── 链接标识（用于去重和对比）──────────────────────────────
+function linkKey(l) {
+  return l.title + '\x00' + l.url;
 }
 
-// ── 分类数据合并 ──────────────────────────────────────────
-function mergeCateData(local, cloud) {
-  if (!cloud || typeof cloud !== 'object') return local;
-  if (!local || typeof local !== 'object') return cloud;
-  const merged = { ...local };
-  for (const cateName in cloud) {
-    if (merged[cateName]) {
-      // 两端都有该分类，合并链接
-      merged[cateName] = mergeLinkArrays(merged[cateName], cloud[cateName]);
-    } else {
-      // 云端有新分类，直接添加
-      merged[cateName] = cloud[cateName];
+// ── 基于快照的智能合并 ────────────────────────────────────
+// snapshot: 上次同步后的数据快照
+// local: 当前本地数据
+// cloud: 当前云端数据
+// 逻辑：
+//   本地新增 = local 有但 snapshot 没有的 → 加入结果
+//   本地删除 = snapshot 有但 local 没有的 → 从结果中移除
+//   云端新增 = cloud 有但 snapshot 没有的 → 加入结果（另一设备的添加）
+//   云端删除 = snapshot 有但 cloud 没有的 → 从结果中移除（另一设备的删除）
+//   两端都有 = 保留
+function smartMergeLinks(local, cloud, snapshot) {
+  const localArr = Array.isArray(local) ? local : [];
+  const cloudArr = Array.isArray(cloud) ? cloud : [];
+  const snapArr = Array.isArray(snapshot) ? snapshot : [];
+
+  const snapSet = new Set(snapArr.map(linkKey));
+  const localSet = new Set(localArr.map(linkKey));
+  const cloudSet = new Set(cloudArr.map(linkKey));
+
+  // 本地删除的链接：快照中有但本地没有
+  const localDeleted = new Set();
+  snapSet.forEach(k => { if (!localSet.has(k)) localDeleted.add(k); });
+
+  // 云端删除的链接：快照中有但云端没有
+  const cloudDeleted = new Set();
+  snapSet.forEach(k => { if (!cloudSet.has(k)) cloudDeleted.add(k); });
+
+  // 合并：取本地和云端的并集，再移除两端删除的
+  const merged = [];
+  const seen = new Set();
+
+  // 先加本地链接
+  for (const l of localArr) {
+    const k = linkKey(l);
+    if (!seen.has(k) && !cloudDeleted.has(k)) {
+      merged.push(l);
+      seen.add(k);
     }
   }
+  // 再加云端链接（本地没有的）
+  for (const l of cloudArr) {
+    const k = linkKey(l);
+    if (!seen.has(k) && !localDeleted.has(k)) {
+      merged.push(l);
+      seen.add(k);
+    }
+  }
+
   return merged;
 }
 
-// ── 分类名列表合并 ────────────────────────────────────────
-function mergeCateLists(local, cloud) {
-  if (!cloud || !Array.isArray(cloud)) return local;
-  if (!local || !Array.isArray(local)) return cloud;
-  const merged = [...local];
-  for (const name of cloud) {
-    if (!merged.includes(name)) merged.push(name);
+// ── 分类数据智能合并 ──────────────────────────────────────
+function smartMergeCate(local, cloud, snapshot) {
+  const localCate = local && typeof local === 'object' ? local : {};
+  const cloudCate = cloud && typeof cloud === 'object' ? cloud : {};
+  const snapCate = snapshot && typeof snapshot === 'object' ? snapshot : {};
+
+  // 收集所有分类名
+  const allCateNames = new Set([
+    ...Object.keys(localCate),
+    ...Object.keys(cloudCate),
+    ...Object.keys(snapCate),
+  ]);
+
+  const merged = {};
+  for (const name of allCateNames) {
+    const localLinks = localCate[name] || [];
+    const cloudLinks = cloudCate[name] || [];
+    const snapLinks = snapCate[name] || [];
+
+    // 如果本地和云端都没有该分类的链接了，跳过（分类被删除）
+    if (localLinks.length === 0 && cloudLinks.length === 0) continue;
+
+    merged[name] = smartMergeLinks(localLinks, cloudLinks, snapLinks);
+    // 如果合并后为空，移除该分类
+    if (merged[name].length === 0) delete merged[name];
   }
+
+  return merged;
+}
+
+// ── 分类名列表智能合并 ────────────────────────────────────
+function smartMergeCateLists(local, cloud, snapshot) {
+  const localList = Array.isArray(local) ? local : [];
+  const cloudList = Array.isArray(cloud) ? cloud : [];
+  const snapList = Array.isArray(snapshot) ? snapshot : [];
+
+  const snapSet = new Set(snapList);
+  const localSet = new Set(localList);
+  const cloudSet = new Set(cloudList);
+
+  // 本地删除的分类：快照中有但本地没有
+  const localDeleted = new Set();
+  snapSet.forEach(k => { if (!localSet.has(k)) localDeleted.add(k); });
+
+  // 云端删除的分类：快照中有但云端没有
+  const cloudDeleted = new Set();
+  snapSet.forEach(k => { if (!cloudSet.has(k)) cloudDeleted.add(k); });
+
+  const merged = [];
+  const seen = new Set();
+
+  for (const name of localList) {
+    if (!seen.has(name) && !cloudDeleted.has(name)) {
+      merged.push(name);
+      seen.add(name);
+    }
+  }
+  for (const name of cloudList) {
+    if (!seen.has(name) && !localDeleted.has(name)) {
+      merged.push(name);
+      seen.add(name);
+    }
+  }
+
   return merged;
 }
 
@@ -91,7 +174,7 @@ class CloudSync {
 
   _loadConfig() {
     const sto = gS('sync');
-    return sto.config || { lastSync: null, autoSync: false };
+    return sto.config || { lastSync: null, autoSync: false, snapshot: null };
   }
 
   saveConfig() {
@@ -128,7 +211,18 @@ class CloudSync {
     });
   }
 
-  // ── 上传到 Supabase（先合并云端数据，再上传）──────────
+  // ── 保存快照 ────────────────────────────────────────────
+  _saveSnapshot(linkData) {
+    this.config.snapshot = linkData;
+    this.saveConfig();
+  }
+
+  // ── 获取快照 ────────────────────────────────────────────
+  _getSnapshot() {
+    return this.config.snapshot || null;
+  }
+
+  // ── 上传到 Supabase（基于快照的增删同步）──────────────
   async upload(silent) {
     if (!this.isAuthenticated()) {
       if (!silent) toast.show('请先登录后再同步');
@@ -140,20 +234,34 @@ class CloudSync {
 
       const user_id = this.getUserId();
       const localLinkData = await this.getLocalLinkData();
+      const snapshot = this._getSnapshot();
 
-      // 先读取云端数据，与本地合并后再上传（避免覆盖其他设备的数据）
-      let mergedLinkData = localLinkData;
+      // 读取云端数据
+      let cloudLinkData = null;
       const existing = await sbFetch(
         `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data`
       );
-
       if (existing && existing.length > 0 && existing[0].data?.link) {
-        const cloudLinkData = existing[0].data.link;
+        cloudLinkData = existing[0].data.link;
+      }
+
+      // 基于快照智能合并
+      let mergedLinkData;
+      if (snapshot && cloudLinkData) {
         mergedLinkData = {
-          links: mergeLinkArrays(localLinkData.links, cloudLinkData.links),
-          cate: mergeCateData(localLinkData.cate, cloudLinkData.cate),
-          catelist: mergeCateLists(localLinkData.catelist, cloudLinkData.catelist),
+          links: smartMergeLinks(localLinkData.links, cloudLinkData.links, snapshot.links),
+          cate: smartMergeCate(localLinkData.cate, cloudLinkData.cate, snapshot.cate),
+          catelist: smartMergeCateLists(localLinkData.catelist, cloudLinkData.catelist, snapshot.catelist),
         };
+      } else if (cloudLinkData) {
+        // 无快照（首次同步），只做简单合并（添加不删除）
+        mergedLinkData = {
+          links: smartMergeLinks(localLinkData.links, cloudLinkData.links, []),
+          cate: smartMergeCate(localLinkData.cate, cloudLinkData.cate, {}),
+          catelist: smartMergeCateLists(localLinkData.catelist, cloudLinkData.catelist, []),
+        };
+      } else {
+        mergedLinkData = localLinkData;
       }
 
       const updated_at = new Date().toISOString();
@@ -173,8 +281,11 @@ class CloudSync {
         });
       }
 
+      // 更新快照为合并后的数据
+      this._saveSnapshot(mergedLinkData);
       this.config.lastSync = updated_at;
       this.saveConfig();
+
       if (!silent) toast.show('同步成功 ✓');
       return { success: true };
 
@@ -202,7 +313,6 @@ class CloudSync {
 
       if (!rows || rows.length === 0) {
         toast.show('云端暂无数据，先上传本地数据');
-        // 云端无数据，直接上传本地数据
         return await this.upload();
       }
 
@@ -212,15 +322,23 @@ class CloudSync {
         return await this.upload();
       }
 
-      // 读取本地链接数据
       const localLinkData = await this.getLocalLinkData();
+      const snapshot = this._getSnapshot();
 
-      // 合并：本地 + 云端，基于 title+url 去重
-      const mergedLinks = mergeLinkArrays(localLinkData.links, cloudLinkData.links);
-      const mergedCate = mergeCateData(localLinkData.cate, cloudLinkData.cate);
-      const mergedCateList = mergeCateLists(localLinkData.catelist, cloudLinkData.catelist);
+      // 基于快照智能合并
+      let mergedLinks, mergedCate, mergedCateList;
+      if (snapshot) {
+        mergedLinks = smartMergeLinks(localLinkData.links, cloudLinkData.links, snapshot.links);
+        mergedCate = smartMergeCate(localLinkData.cate, cloudLinkData.cate, snapshot.cate);
+        mergedCateList = smartMergeCateLists(localLinkData.catelist, cloudLinkData.catelist, snapshot.catelist);
+      } else {
+        // 无快照（首次同步），只做简单合并
+        mergedLinks = smartMergeLinks(localLinkData.links, cloudLinkData.links, []);
+        mergedCate = smartMergeCate(localLinkData.cate, cloudLinkData.cate, {});
+        mergedCateList = smartMergeCateLists(localLinkData.catelist, cloudLinkData.catelist, []);
+      }
 
-      // 通过 link 模块的 setAll 写回（正确处理 IndexedDB）
+      // 写回本地
       await new Promise((resolve) => {
         link.setAll(mergedLinks, mergedCate, () => {
           const sto = gS('link');
@@ -229,15 +347,18 @@ class CloudSync {
         });
       });
 
-      // 合并后上传回云端，确保云端也是最新合并数据
+      // 上传合并结果到云端
       const updated_at = new Date().toISOString();
-      const data = { link: { links: mergedLinks, cate: mergedCate, catelist: mergedCateList } };
+      const mergedLinkData = { links: mergedLinks, cate: mergedCate, catelist: mergedCateList };
+      const data = { link: mergedLinkData };
       await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
         method: 'PATCH',
         headers: { 'Prefer': 'return=minimal' },
         body: JSON.stringify({ data, updated_at }),
       });
 
+      // 更新快照
+      this._saveSnapshot(mergedLinkData);
       this.config.lastSync = updated_at;
       this.saveConfig();
 
