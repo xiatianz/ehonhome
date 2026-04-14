@@ -319,14 +319,14 @@ class CloudSync {
   }
 
   // ── 从 Supabase 下载并合并到本地 ────────────────────────
-  async download() {
+  async download(silent) {
     if (!this.isAuthenticated()) {
-      toast.show('请先登录后再同步');
+      if (!silent) toast.show('请先登录后再同步');
       return { success: false, error: 'Not authenticated' };
     }
 
     try {
-      toast.show('正在同步...');
+      if (!silent) toast.show('正在同步...');
       const user_id = this.getUserId();
 
       const rows = await sbFetch(
@@ -334,8 +334,8 @@ class CloudSync {
       );
 
       if (!rows || rows.length === 0) {
-        toast.show('云端暂无数据，先上传本地数据');
-        return await this.upload();
+        if (!silent) toast.show('云端暂无数据，先上传本地数据');
+        return await this.upload(silent);
       }
 
       let cloudLinkData = rows[0].data?.link;
@@ -348,8 +348,8 @@ class CloudSync {
         };
       }
       if (!cloudLinkData) {
-        toast.show('云端无链接数据，先上传本地数据');
-        return await this.upload();
+        if (!silent) toast.show('云端无链接数据，先上传本地数据');
+        return await this.upload(silent);
       }
 
       const localLinkData = await this.getLocalLinkData();
@@ -392,11 +392,11 @@ class CloudSync {
       this.config.lastSync = updated_at;
       this.saveConfig();
 
-      toast.show('同步成功，数据已合并 ✓');
+      if (!silent) toast.show('同步成功，数据已合并 ✓');
       return { success: true };
 
     } catch (error) {
-      toast.show('同步失败: ' + error.message);
+      if (!silent) toast.show('同步失败: ' + error.message);
       console.error('[Sync] download error:', error);
       return { success: false, error: error.message };
     }

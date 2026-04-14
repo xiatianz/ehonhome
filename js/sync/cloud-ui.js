@@ -164,8 +164,8 @@ function showLoginDialog() {
     if (result.success) {
       d.close();
       setTimeout(() => { d.destroy(); }, 300);
-      // 登录成功后先同步云端数据，再开启自动同步
-      cloudSync.download().catch(() => {}).finally(() => {
+      // 登录成功后先同步云端数据，再开启自动同步（静默）
+      cloudSync.download(true).catch(() => {}).finally(() => {
         cloudSync.config.autoSync = true;
         cloudSync.saveConfig();
         refreshUI();
@@ -216,8 +216,8 @@ function showLoginDialog() {
       } else {
         d.close();
         setTimeout(() => { d.destroy(); }, 300);
-        // 注册成功后先同步云端数据，再开启自动同步
-        cloudSync.download().catch(() => {}).finally(() => {
+        // 注册成功后先同步云端数据，再开启自动同步（静默）
+        cloudSync.download(true).catch(() => {}).finally(() => {
           cloudSync.config.autoSync = true;
           cloudSync.saveConfig();
           refreshUI();
@@ -465,8 +465,8 @@ supabaseAuth.init().then((isAuth) => {
   refreshUI();
   if (isAuth) {
     // 登录后先从云端同步数据到本地，再开启自动同步
-    // 这样避免本地空数据覆盖云端
-    cloudSync.download().catch(() => {}).finally(() => {
+    // 静默模式，不弹toast
+    cloudSync.download(true).catch(() => {}).finally(() => {
       cloudSync.config.autoSync = true;
       cloudSync.saveConfig();
     });
