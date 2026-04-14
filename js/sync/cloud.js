@@ -41,18 +41,20 @@ class CloudSync {
   // GitHub OAuth 登录
   async loginWithGitHub() {
     try {
-      // 打开 GitHub OAuth 授权窗口
-      const authUrl = `${API_BASE}/api/auth/github`;
-      console.log('Opening OAuth URL:', authUrl);
+      // 第一步：获取 GitHub 授权 URL
+      const apiUrl = `${API_BASE}/api/auth/github`;
+      console.log('Fetching auth URL from:', apiUrl);
       
-      const popup = window.open(authUrl, 'github-oauth', 'width=600,height=700');
+      const response = await fetch(apiUrl);
+      const data = await response.json();
       
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-        // 弹窗被拦截
-        toast.show('请允许弹窗，或点击链接登录');
-        // 在新标签页打开
-        window.open(authUrl, '_blank');
-        return { success: false, error: 'Popup blocked' };
+      console.log('Auth response:', data);
+      
+      // 如果需要授权，跳转到 GitHub
+      if (data.needAuth && data.authUrl) {
+        // 在当前窗口打开授权页面
+        window.location.href = data.authUrl;
+        return { success: false, needAuth: true };
       }
       
       // 监听消息
