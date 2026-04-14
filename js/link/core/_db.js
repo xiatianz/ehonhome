@@ -4,22 +4,7 @@ const { confirm } = require('../../dialog/dialog_utils');
 const toast = require('../../toast');
 initsto.set('storage-mode', 'db');
 
-var defLinks = [{
-  title: "百度翻译",
-  url: "https://fanyi.baidu.com/"
-}, {
-  title: "哔哩哔哩",
-  url: "https://www.bilibili.com/"
-}, {
-  title: "知乎",
-  url: "https://www.zhihu.com/"
-}, {
-  title: "网易云音乐",
-  url: "https://music.163.com/"
-}, {
-  title: "Github",
-  url: "https://github.com/"
-}];
+var defLinks = [];
 
 // 初始化进度，2为初始化完毕
 var initState = 0, readySatae = 3;
