@@ -22,26 +22,7 @@ window.version = {
 if ('serviceWorker' in navigator && !window._dev) {
   navigator.serviceWorker.ready.then(registration => {
     window.swReg = registration;
-    if (window.location.href.indexOf('://home.ehon.cn/') != -1) {
-      var ifr = el('iframe', {
-        src: './version',
-        style: "opacity:0"
-      });
-      document.body.appendChild(ifr);
-      var i = 0;
-      ifr.onload = function () {
-        i++;
-        if (i >= 2) {
-          updateBySW(registration)
-        }
-      }
-      setTimeout(() => {
-        updateBySW(registration);
-      }, 4000)
-    } else {
-      updateBySW(registration);
-    }
-
+    updateBySW(registration);
   });
   var _i=0;
   function updateBySW(registration) {
@@ -57,21 +38,7 @@ if ('serviceWorker' in navigator && !window._dev) {
         }else if(location.href.indexOf('://home.ehon.cn/') != -1&&_i==0){
           _i++;
           toast.show('发现新版本(版本序号：' + nv + ')，正在更新');
-          var ifr = el('iframe', {
-            src: './version',
-            style: "opacity:0"
-          });
-          document.body.appendChild(ifr);
-          var i = 0;
-          ifr.onload = function () {
-            i++;
-            if (i >= 2) {
-              updateBySW(registration)
-            }
-          }
-          setTimeout(() => {
-            updateBySW(registration)
-          }, 4000)
+          registration.active.postMessage('update');
         } else {
           toast.show('发现新版本(版本序号：' + nv + ')，正在更新');
           registration.active.postMessage('update');
