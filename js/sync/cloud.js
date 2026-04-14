@@ -42,7 +42,7 @@ class CloudSync {
   async loginWithGitHub() {
     try {
       // 打开 GitHub OAuth 授权窗口
-      const authUrl = `${API_BASE}/api/auth/github`;
+      const authUrl = `${API_BASE}/api/github`;
       const popup = window.open(authUrl, 'github-oauth', 'width=600,height=700');
       
       // 监听消息

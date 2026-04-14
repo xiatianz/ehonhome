@@ -41,7 +41,7 @@ function addCloudSyncToMenu() {
     }
   };
   
-  // 添加到右上角菜单
+  // 添加到右上角菜单（只在顶部添加一个同步按钮）
   pushMenu({
     title: cloudSync.isLoggedIn() ? '☁️ 同步到云端' : '☁️ 登录并同步',
     icon: util.getGoogleIcon('e2bd'),
@@ -59,30 +59,6 @@ function addCloudSyncToMenu() {
         });
       }
     }
-  }, MAIN_MENU_TOP);
-  
-  // 添加下载按钮
-  pushMenu({
-    title: '⬇️ 从云端恢复',
-    icon: util.getGoogleIcon('e092'),
-    callback: () => {
-      if (!cloudSync.isLoggedIn()) {
-        alert('请先登录');
-        return;
-      }
-      confirm('下载云端数据将覆盖本地数据，确定继续吗？', ok => {
-        if (ok) {
-          cloudSync.download().then(() => {
-            alert('数据已同步，请刷新页面以应用更改');
-          });
-        }
-      });
-    }
-  }, MAIN_MENU_TOP);
-  
-  // 添加分隔线
-  pushMenu({
-    type: 'hr'
   }, MAIN_MENU_TOP);
 }
 
