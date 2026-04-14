@@ -16,6 +16,18 @@ export default async function onRequest(context) {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // 诊断：检查 KV 绑定是否存在
+  if (!env || !env.ehon_kv) {
+    return new Response(JSON.stringify({
+      error: 'KV not bound',
+      message: 'env.ehon_kv is undefined. Please bind KV namespace in EdgeOne Pages project settings and redeploy.',
+      envKeys: env ? Object.keys(env) : [],
+    }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     // 通过 X-Device-ID 头获取设备 ID（无需登录）
     const deviceId = request.headers.get('X-Device-ID');
