@@ -99,6 +99,8 @@ class CloudSync {
     if (!cloudData || typeof cloudData !== 'object') return;
     Object.keys(cloudData).forEach(key => {
       if (key.startsWith('_')) return;
+      // link 数据结构复杂（含分类、IndexedDB引用），不能直接覆盖
+      if (key === 'link') return;
       try {
         const sto = gS(key);
         if (sto && cloudData[key]) Object.assign(sto, cloudData[key]);
@@ -109,14 +111,14 @@ class CloudSync {
   }
 
   // ── 上传到 Supabase ───────────────────────────────────────
-  async upload() {
+  async upload(silent) {
     if (!this.isAuthenticated()) {
-      toast.show('请先登录后再同步');
+      if (!silent) toast.show('请先登录后再同步');
       return { success: false, error: 'Not authenticated' };
     }
 
     try {
-      toast.show('正在同步...');
+      if (!silent) toast.show('正在同步...');
       const data = this.getAllLocalData();
       const updated_at = new Date().toISOString();
       const user_id = this.getUserId();
@@ -151,11 +153,11 @@ class CloudSync {
 
       this.config.lastSync = updated_at;
       this.saveConfig();
-      toast.show('数据已同步到云端 ✓');
+      if (!silent) toast.show('数据已同步到云端 ✓');
       return { success: true };
 
     } catch (error) {
-      toast.show('同步失败: ' + error.message);
+      if (!silent) toast.show('同步失败: ' + error.message);
       console.error('[Sync] upload error:', error);
       return { success: false, error: error.message };
     }

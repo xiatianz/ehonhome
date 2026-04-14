@@ -164,14 +164,10 @@ function showLoginDialog() {
     if (result.success) {
       d.close();
       setTimeout(() => { d.destroy(); }, 300);
-      // 登录成功后开启自动同步并从云端下载数据
+      // 登录成功后开启自动同步
       cloudSync.config.autoSync = true;
       cloudSync.saveConfig();
       refreshUI();
-      _autoSyncing = true;
-      cloudSync.download().catch(() => {}).finally(() => {
-        _autoSyncing = false;
-      });
     } else {
       errorEl.textContent = result.error || '登录失败';
     }
@@ -218,14 +214,10 @@ function showLoginDialog() {
       } else {
         d.close();
         setTimeout(() => { d.destroy(); }, 300);
-        // 注册成功后开启自动同步并从云端下载数据
+        // 注册成功后开启自动同步
         cloudSync.config.autoSync = true;
         cloudSync.saveConfig();
         refreshUI();
-        _autoSyncing = true;
-        cloudSync.download().catch(() => {}).finally(() => {
-          _autoSyncing = false;
-        });
       }
     } else {
       errorEl.textContent = result.error || '注册失败';
@@ -454,27 +446,24 @@ storage.on('storage', () => {
   if (!cloudSync.config.autoSync || !cloudSync.isAuthenticated()) return;
   // 上传期间不再触发，避免 saveConfig → storage事件 → 无限循环
   if (_autoSyncing) return;
-  // 防抖：3秒内多次变更只触发一次上传
+  // 防抖：5秒内多次变更只触发一次上传
   clearTimeout(_autoSyncTimer);
   _autoSyncTimer = setTimeout(() => {
     _autoSyncing = true;
-    cloudSync.upload().catch(() => {}).finally(() => {
-      _autoSyncing = false;
+    cloudSync.upload(true).catch(() => {}).finally(() => {
+      // 延迟释放锁，让 saveConfig 触发的 storage 事件被忽略
+      setTimeout(() => { _autoSyncing = false; }, 2000);
     });
-  }, 3000);
+  }, 5000);
 });
 
 // ── 初始化：恢复登录状态 ──────────────────────────────────
 supabaseAuth.init().then((isAuth) => {
   refreshUI();
-  // 登录成功后自动从云端下载数据，并开启自动同步
+  // 登录成功后开启自动同步（不自动下载，避免覆盖本地数据）
   if (isAuth) {
     cloudSync.config.autoSync = true;
     cloudSync.saveConfig();
-    _autoSyncing = true;
-    cloudSync.download().catch(() => {}).finally(() => {
-      _autoSyncing = false;
-    });
   }
 });
 
