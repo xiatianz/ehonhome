@@ -1,6 +1,6 @@
 // EdgeOne Cloud Functions - KV 数据同步 API
 // 路由: /api/sync
-// 使用 Node.js runtime
+// 使用 Node.js runtime（无需登录，通过设备 ID 标识）
 
 export default function onRequest(context) {
   const { request, env } = context;
@@ -9,7 +9,7 @@ export default function onRequest(context) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Device-ID',
   };
   
   if (request.method === 'OPTIONS') {
@@ -21,31 +21,21 @@ export default function onRequest(context) {
 
 async function handleRequest(request, env, corsHeaders) {
   try {
-    // 验证用户身份
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
+    // 通过 X-Device-ID 头获取设备 ID（无需登录）
+    const deviceId = request.headers.get('X-Device-ID');
+    if (!deviceId) {
+      return new Response(JSON.stringify({ error: 'Missing X-Device-ID header' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
     
-    const token = authHeader.substring(7);
-    const userId = await verifyToken(token, env);
-    
-    if (!userId) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-    
-    // 用户数据存储 key
-    const userKey = `user:${userId}:data`;
+    // 设备数据存储 key
+    const userKey = `device:${deviceId}:data`;
     
     switch (request.method) {
       case 'GET':
-        // 获取用户数据
+        // 获取设备数据
         const data = await env.ehon_kv.get(userKey, 'json');
         return new Response(JSON.stringify({ 
           success: true, 
@@ -57,7 +47,7 @@ async function handleRequest(request, env, corsHeaders) {
         
       case 'POST':
       case 'PUT':
-        // 保存用户数据
+        // 保存设备数据
         const body = await request.json();
         
         // 添加同步时间戳
@@ -76,7 +66,7 @@ async function handleRequest(request, env, corsHeaders) {
         });
         
       case 'DELETE':
-        // 删除用户数据
+        // 删除设备数据
         await env.ehon_kv.delete(userKey);
         return new Response(JSON.stringify({ 
           success: true, 
@@ -99,43 +89,5 @@ async function handleRequest(request, env, corsHeaders) {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-  }
-}
-
-// 验证 token
-async function verifyToken(token, env) {
-  try {
-    // 如果配置了 JWT_SECRET，验证 JWT
-    if (env.JWT_SECRET) {
-      const parts = token.split('.');
-      if (parts.length !== 3) return null;
-      
-      // 使用 Node.js Buffer 解码 base64url
-      const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-      const payload = JSON.parse(payloadJson);
-      
-      if (payload.exp && payload.exp < Date.now() / 1000) {
-        return null; // Token 过期
-      }
-      return payload.sub; // 返回用户 ID
-    }
-    
-    // 否则直接验证 GitHub token
-    const response = await fetch('https://api.github.com/user', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github.v3+json'
-      }
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    const user = await response.json();
-    return user.id.toString();
-  } catch (error) {
-    console.error('Token verification error:', error);
-    return null;
   }
 }
