@@ -23,7 +23,7 @@ function addCloudSyncToMenu() {
   syncIcon.getIcon().onclick = e => {
     e.stopPropagation();
     if (cloudSync.isAuthenticated()) {
-      cloudSync.upload();
+      cloudSync.download();
     } else {
       showLoginDialog();
     }
@@ -33,7 +33,7 @@ function addCloudSyncToMenu() {
     icon: util.getGoogleIcon('e2bd'),
     callback: () => {
       if (cloudSync.isAuthenticated()) {
-        cloudSync.upload();
+        cloudSync.download();
       } else {
         showLoginDialog();
       }
@@ -309,7 +309,7 @@ const loginStatusItem = new SettingItem({
 const uploadItem = new SettingItem({
   type: 'null',
   title: '上传到云端',
-  message: '将本地数据备份到云端',
+  message: '将本地链接数据上传到云端',
   index: 2,
   check() { return cloudSync.isAuthenticated(); },
   callback() {
@@ -320,16 +320,15 @@ const uploadItem = new SettingItem({
 // ── 下载 ─────────────────────────────────────────────────
 const downloadItem = new SettingItem({
   type: 'null',
-  title: '从云端下载',
-  message: '从云端恢复数据到本地（会覆盖本地）',
+  title: '同步云端数据',
+  message: '合并本地与云端的链接数据（去重，不丢失）',
   index: 3,
   check() { return cloudSync.isAuthenticated(); },
   callback() {
-    confirm('下载云端数据将覆盖本地数据，确定继续吗？', ok => {
-      if (ok) {
-        cloudSync.download().then(res => {
-          if (res.success) alert('数据已同步，请刷新页面以应用更改');
-        });
+    cloudSync.download().then(res => {
+      if (res.success) {
+        lastSyncItem.reGet();
+        toast.show('建议刷新页面以显示最新数据');
       }
     });
   },

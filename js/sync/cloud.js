@@ -1,7 +1,9 @@
 // 云端同步模块 - Supabase Auth（基于用户登录）
+// 只同步链接数据，使用 link 模块的正确接口读写 IndexedDB
 const { gS } = require('../storage');
 const toast = require('../toast');
 const supabaseAuth = require('./auth');
+const link = require('../link/index');
 
 const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
@@ -9,33 +11,24 @@ const TABLE = 'sync_data';
 
 // ── Supabase REST 请求封装 ─────────────────────────────────
 async function sbFetch(path, options = {}) {
-  // 获取当前用户的 access token
   const accessToken = supabaseAuth.getAccessToken();
-  
   const headers = {
     'apikey': SUPABASE_ANON_KEY,
     'Content-Type': 'application/json',
   };
-
-  // 如果已登录，使用用户的 access token；否则使用 anon key
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`;
   } else {
     headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
   }
-
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       ...options,
       headers: { ...headers, ...(options.headers || {}) },
     });
-
-    // 204 No Content 直接返回 null
     if (res.status === 204) return null;
-
     const text = await res.text();
     if (!text || !text.trim()) return null;
-
     const json = JSON.parse(text);
     if (!res.ok) {
       const errMsg = json.message || json.error || json.msg || `HTTP ${res.status}`;
@@ -50,12 +43,52 @@ async function sbFetch(path, options = {}) {
   }
 }
 
+// ── 链接去重合并 ──────────────────────────────────────────
+// 基于 title+url 去重，保留两端的链接
+function mergeLinkArrays(local, cloud) {
+  if (!cloud || !Array.isArray(cloud)) return local;
+  if (!local || !Array.isArray(local)) return cloud;
+  const merged = [...local];
+  for (const cl of cloud) {
+    const exists = merged.find(l => l.title === cl.title && l.url === cl.url);
+    if (!exists) merged.push(cl);
+  }
+  return merged;
+}
+
+// ── 分类数据合并 ──────────────────────────────────────────
+function mergeCateData(local, cloud) {
+  if (!cloud || typeof cloud !== 'object') return local;
+  if (!local || typeof local !== 'object') return cloud;
+  const merged = { ...local };
+  for (const cateName in cloud) {
+    if (merged[cateName]) {
+      // 两端都有该分类，合并链接
+      merged[cateName] = mergeLinkArrays(merged[cateName], cloud[cateName]);
+    } else {
+      // 云端有新分类，直接添加
+      merged[cateName] = cloud[cateName];
+    }
+  }
+  return merged;
+}
+
+// ── 分类名列表合并 ────────────────────────────────────────
+function mergeCateLists(local, cloud) {
+  if (!cloud || !Array.isArray(cloud)) return local;
+  if (!local || !Array.isArray(local)) return cloud;
+  const merged = [...local];
+  for (const name of cloud) {
+    if (!merged.includes(name)) merged.push(name);
+  }
+  return merged;
+}
+
 class CloudSync {
   constructor() {
     this.config = this._loadConfig();
   }
 
-  // ── 同步配置 ──────────────────────────────────────────────
   _loadConfig() {
     const sto = gS('sync');
     return sto.config || { lastSync: null, autoSync: false };
@@ -68,45 +101,31 @@ class CloudSync {
 
   getLastSyncTime() { return this.config.lastSync; }
 
-  // ── 认证状态代理 ──────────────────────────────────────────
   isAuthenticated() { return supabaseAuth.isAuthenticated(); }
   getUser()         { return supabaseAuth.getUser(); }
   getEmail()        { return supabaseAuth.getEmail(); }
   getUserId()       { return supabaseAuth.getUserId(); }
 
-  // 兼容旧接口
   isEnabled()  { return this.isAuthenticated(); }
   enable()     {}
   disable()    {}
 
-  // ── 收集本地数据 ──────────────────────────────────────────
-  getAllLocalData() {
-    const keys = ['setting', 'link', 'says', 'hello', 'background', 'custom', 'oobe'];
-    const data = {};
-    keys.forEach(key => {
-      try {
-        const sto = gS(key);
-        if (sto) data[key] = sto.getAll ? sto.getAll() : sto;
-      } catch (e) {
-        console.error(`[Sync] get "${key}" failed:`, e);
-      }
-    });
-    return data;
-  }
-
-  // ── 合并云端数据到本地 ────────────────────────────────────
-  mergeCloudData(cloudData) {
-    if (!cloudData || typeof cloudData !== 'object') return;
-    Object.keys(cloudData).forEach(key => {
-      if (key.startsWith('_')) return;
-      // link 数据结构复杂（含分类、IndexedDB引用），不能直接覆盖
-      if (key === 'link') return;
-      try {
-        const sto = gS(key);
-        if (sto && cloudData[key]) Object.assign(sto, cloudData[key]);
-      } catch (e) {
-        console.error(`[Sync] merge "${key}" failed:`, e);
-      }
+  // ── 收集本地链接数据（通过 link 模块的正确接口）──────
+  async getLocalLinkData() {
+    return new Promise((resolve) => {
+      link.ready(() => {
+        link.getCateAll((cate) => {
+          link.getLinks(null, (links) => {
+            link.getCates((catelist) => {
+              resolve({
+                links: links || [],
+                cate: cate || {},
+                catelist: catelist || [],
+              });
+            });
+          });
+        });
+      });
     });
   }
 
@@ -119,9 +138,13 @@ class CloudSync {
 
     try {
       if (!silent) toast.show('正在同步...');
-      const data = this.getAllLocalData();
+
+      // 通过 link 模块正确读取链接数据（包括 IndexedDB）
+      const linkData = await this.getLocalLinkData();
       const updated_at = new Date().toISOString();
       const user_id = this.getUserId();
+
+      const data = { link: linkData };
 
       // 先查询该用户是否已有数据
       const existing = await sbFetch(
@@ -129,31 +152,22 @@ class CloudSync {
       );
 
       if (existing && existing.length > 0) {
-        // 已有记录，使用 PATCH 更新
         await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            data,
-            updated_at,
-          }),
+          body: JSON.stringify({ data, updated_at }),
         });
       } else {
-        // 无记录，使用 POST 插入
         await sbFetch(TABLE, {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            user_id,
-            data,
-            updated_at,
-          }),
+          body: JSON.stringify({ user_id, data, updated_at }),
         });
       }
 
       this.config.lastSync = updated_at;
       this.saveConfig();
-      if (!silent) toast.show('数据已同步到云端 ✓');
+      if (!silent) toast.show('同步成功 ✓');
       return { success: true };
 
     } catch (error) {
@@ -163,7 +177,7 @@ class CloudSync {
     }
   }
 
-  // ── 从 Supabase 下载 ──────────────────────────────────────
+  // ── 从 Supabase 下载并合并 ────────────────────────────────
   async download() {
     if (!this.isAuthenticated()) {
       toast.show('请先登录后再同步');
@@ -171,7 +185,7 @@ class CloudSync {
     }
 
     try {
-      toast.show('正在下载...');
+      toast.show('正在同步...');
       const user_id = this.getUserId();
 
       const rows = await sbFetch(
@@ -183,16 +197,37 @@ class CloudSync {
         return { success: false, error: 'No data' };
       }
 
-      const { data, updated_at } = rows[0];
-      this.mergeCloudData(data);
+      const cloudLinkData = rows[0].data?.link;
+      if (!cloudLinkData) {
+        toast.show('云端无链接数据');
+        return { success: false, error: 'No link data' };
+      }
 
-      this.config.lastSync = updated_at;
+      // 读取本地链接数据
+      const localLinkData = await this.getLocalLinkData();
+
+      // 合并：本地 + 云端，基于 title+url 去重
+      const mergedLinks = mergeLinkArrays(localLinkData.links, cloudLinkData.links);
+      const mergedCate = mergeCateData(localLinkData.cate, cloudLinkData.cate);
+      const mergedCateList = mergeCateLists(localLinkData.catelist, cloudLinkData.catelist);
+
+      // 通过 link 模块的 setAll 写回（正确处理 IndexedDB）
+      await new Promise((resolve) => {
+        link.setAll(mergedLinks, mergedCate, () => {
+          // 更新 catelist
+          const sto = gS('link');
+          if (sto) sto.catelist = mergedCateList;
+          resolve();
+        });
+      });
+
+      this.config.lastSync = rows[0].updated_at;
       this.saveConfig();
-      toast.show('数据已从云端恢复 ✓');
+      toast.show('同步成功，数据已合并 ✓');
       return { success: true };
 
     } catch (error) {
-      toast.show('下载失败: ' + error.message);
+      toast.show('同步失败: ' + error.message);
       console.error('[Sync] download error:', error);
       return { success: false, error: error.message };
     }
@@ -201,7 +236,7 @@ class CloudSync {
   // ── 自动同步 ──────────────────────────────────────────────
   async autoSync() {
     if (this.config.autoSync && this.isAuthenticated()) {
-      return await this.upload();
+      return await this.upload(true);
     }
   }
 }
