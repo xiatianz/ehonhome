@@ -183,7 +183,7 @@ class CloudSync {
   }
   
   // 获取设备 ID（用于在其他设备上同步）
-  getDeviceId() {
+  getCurrentDeviceId() {
     return this.deviceId;
   }
   

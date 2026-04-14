@@ -136,11 +136,11 @@ const deviceIdItem = new SettingItem({
   message: '用于多设备同步，点击复制',
   index: 5,
   get() {
-    const id = cloudSync.getDeviceId();
+    const id = cloudSync.getCurrentDeviceId();
     return id.substring(0, 20) + '...';
   },
   callback() {
-    const deviceId = cloudSync.getDeviceId();
+    const deviceId = cloudSync.getCurrentDeviceId();
     // 复制到剪贴板
     navigator.clipboard.writeText(deviceId).then(() => {
       alert('设备 ID 已复制到剪贴板');
