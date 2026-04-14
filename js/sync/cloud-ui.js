@@ -2,6 +2,9 @@
 const { SettingGroup, SettingItem, mainSetting } = require('../setting/index');
 const { alert, confirm } = require('../dialog/dialog_utils');
 const cloudSync = require('./cloud');
+const { pushMenu, MAIN_MENU_TOP } = require('../menu/mainmenu');
+const { icon } = require('../iconc');
+const util = require('../util');
 
 // 创建设置分组
 const cloudGroup = new SettingGroup({
@@ -9,6 +12,88 @@ const cloudGroup = new SettingGroup({
   index: 6,
 });
 mainSetting.addNewGroup(cloudGroup);
+
+// 在右上角菜单添加云端同步按钮
+function addCloudSyncToMenu() {
+  // 同步按钮图标
+  const syncIcon = new icon({
+    class: 'cloud_sync',
+    content: util.getGoogleIcon('e2bd'), // cloud_sync 图标
+    offset: 'tr'
+  });
+  
+  // 点击直接同步
+  syncIcon.getIcon().onclick = e => {
+    e.stopPropagation();
+    if (cloudSync.isLoggedIn()) {
+      // 已登录，直接上传
+      cloudSync.upload();
+    } else {
+      // 未登录，打开登录
+      cloudSync.loginWithGitHub().then(result => {
+        if (result.success) {
+          updateMenuUI();
+          alert('登录成功！');
+        }
+      }).catch(error => {
+        alert('登录失败: ' + error.message);
+      });
+    }
+  };
+  
+  // 添加到右上角菜单
+  pushMenu({
+    title: cloudSync.isLoggedIn() ? '☁️ 同步到云端' : '☁️ 登录并同步',
+    icon: util.getGoogleIcon('e2bd'),
+    callback: () => {
+      if (cloudSync.isLoggedIn()) {
+        cloudSync.upload();
+      } else {
+        cloudSync.loginWithGitHub().then(result => {
+          if (result.success) {
+            updateMenuUI();
+            alert('登录成功！');
+          }
+        }).catch(error => {
+          alert('登录失败: ' + error.message);
+        });
+      }
+    }
+  }, MAIN_MENU_TOP);
+  
+  // 添加下载按钮
+  pushMenu({
+    title: '⬇️ 从云端恢复',
+    icon: util.getGoogleIcon('e092'),
+    callback: () => {
+      if (!cloudSync.isLoggedIn()) {
+        alert('请先登录');
+        return;
+      }
+      confirm('下载云端数据将覆盖本地数据，确定继续吗？', ok => {
+        if (ok) {
+          cloudSync.download().then(() => {
+            alert('数据已同步，请刷新页面以应用更改');
+          });
+        }
+      });
+    }
+  }, MAIN_MENU_TOP);
+  
+  // 添加分隔线
+  pushMenu({
+    type: 'hr'
+  }, MAIN_MENU_TOP);
+}
+
+// 更新菜单状态
+function updateMenuUI() {
+  // 重新加载页面以更新菜单
+  location.reload();
+}
+
+// 初始化菜单
+setTimeout(addCloudSyncToMenu, 200);
 
 // 登录状态显示
 const loginStatusItem = new SettingItem({
