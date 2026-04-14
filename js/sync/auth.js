@@ -151,10 +151,10 @@ class SupabaseAuth {
     try {
       toast.show('正在登录...');
       
-      const result = await this._request('token', {
+      // Supabase Auth: grant_type 必须作为 URL 查询参数
+      const result = await this._request('token?grant_type=password', {
         method: 'POST',
         body: JSON.stringify({
-          grant_type: 'password',
           email,
           password,
         }),
@@ -214,7 +214,7 @@ class SupabaseAuth {
     const error = params.get('error');
     const error_description = params.get('error_description');
     if (error) {
-      toast.show('登录失败: ' + (error_description || error));
+      this._oauthError = error_description || error;
       this._cleanHash();
       return false;
     }
@@ -250,16 +250,11 @@ class SupabaseAuth {
     };
     
     this._saveSession(session);
+    this._oauthSuccess = true;
+    this._oauthType = type;
     
     // 清除 URL hash，避免 token 暴露在地址栏
     this._cleanHash();
-    
-    // 显示提示
-    if (type === 'recovery') {
-      toast.show('密码重置验证成功 ✓');
-    } else {
-      toast.show('GitHub 登录成功 ✓');
-    }
     
     return true;
   }
@@ -354,10 +349,10 @@ class SupabaseAuth {
     }
 
     try {
-      const result = await this._request('token', {
+      // Supabase Auth: grant_type 必须作为 URL 查询参数
+      const result = await this._request('token?grant_type=refresh_token', {
         method: 'POST',
         body: JSON.stringify({
-          grant_type: 'refresh_token',
           refresh_token: this.session.refresh_token,
         }),
       });
@@ -385,7 +380,26 @@ class SupabaseAuth {
   async init() {
     // 优先检查 OAuth 回调（URL hash 中有 token）
     if (this.handleOAuthCallback()) {
+      // 延迟显示 toast，等 toast 模块初始化完成
+      setTimeout(() => {
+        if (this._oauthSuccess) {
+          if (this._oauthType === 'recovery') {
+            toast.show('密码重置验证成功 ✓');
+          } else {
+            toast.show('GitHub 登录成功 ✓');
+          }
+          this._oauthSuccess = false;
+        }
+      }, 500);
       return this.isAuthenticated();
+    }
+
+    // OAuth 回调有错误
+    if (this._oauthError) {
+      const err = this._oauthError;
+      this._oauthError = null;
+      setTimeout(() => { toast.show('登录失败: ' + err); }, 500);
+      return false;
     }
 
     // 尝试从 localStorage 恢复 session
