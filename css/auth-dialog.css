@@ -1,0 +1,186 @@
+/* ── Auth 登录/注册对话框 ──────────────────────────────── */
+.auth-dialog {
+  min-width: 280px;
+  max-width: 400px;
+  padding: 10px;
+}
+
+.auth-dialog .auth-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--input-bottom, rgba(0,0,0,0.12));
+  margin-bottom: 20px;
+}
+
+.auth-dialog .auth-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--desc-text-color, #888);
+  transition: color 0.2s, border-color 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.auth-dialog .auth-tab.active {
+  color: var(--theme-color);
+  border-bottom-color: var(--theme-color);
+}
+
+.auth-dialog .auth-tab:hover {
+  color: var(--theme-color);
+}
+
+.auth-dialog .auth-field {
+  margin-bottom: 16px;
+}
+
+.auth-dialog .auth-field label {
+  display: block;
+  font-size: 13px;
+  color: var(--desc-text-color, #888);
+  margin-bottom: 6px;
+}
+
+.auth-dialog .auth-field input {
+  width: 100%;
+  height: 36px;
+  border: none;
+  outline: none;
+  border-bottom: 1px solid var(--input-bottom, rgba(0,0,0,0.12));
+  background-color: transparent;
+  color: inherit;
+  font-size: 14px;
+  padding: 4px 2px;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.auth-dialog .auth-field input:focus {
+  border-bottom-color: var(--theme-color);
+}
+
+.auth-dialog .auth-field input::placeholder {
+  color: var(--desc-text-color, #aaa);
+}
+
+.auth-dialog .auth-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.auth-dialog .auth-actions .btn {
+  min-width: 80px;
+  line-height: 32px;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+  box-shadow: var(--shadow-color) 0 1px 2px;
+  background-color: var(--btn-color);
+  color: var(--btn-text-color);
+  border-radius: 4px;
+  display: inline-block;
+  text-align: center;
+  font-size: 13px;
+  padding: 0 12px;
+  transition: background-color 0.2s;
+}
+
+.auth-dialog .auth-actions .btn.ok {
+  background-color: var(--theme-color);
+  color: var(--theme-bg-text-color, #fff);
+  flex: 1;
+}
+
+.auth-dialog .auth-actions .btn.ok:hover {
+  background-color: var(--theme-color-deep);
+}
+
+.auth-dialog .auth-actions .btn.ok:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-dialog .auth-error {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #e53935;
+  min-height: 16px;
+  line-height: 16px;
+}
+
+/* ── GitHub 登录按钮 ─────────────────────────────────────── */
+.auth-dialog .auth-github-btn {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--input-bottom, rgba(0,0,0,0.2));
+  border-radius: 6px;
+  background-color: #24292e;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s, border-color 0.2s;
+  margin-bottom: 4px;
+}
+
+.auth-dialog .auth-github-btn:hover {
+  background-color: #2f363d;
+}
+
+.auth-dialog .auth-github-btn:active {
+  background-color: #1b1f23;
+}
+
+.auth-dialog .auth-github-btn svg {
+  flex-shrink: 0;
+}
+
+/* ── 分隔线 ──────────────────────────────────────────────── */
+.auth-dialog .auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 16px 0;
+  gap: 12px;
+}
+
+.auth-dialog .auth-divider::before,
+.auth-dialog .auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--input-bottom, rgba(0,0,0,0.12));
+}
+
+.auth-dialog .auth-divider span {
+  font-size: 12px;
+  color: var(--desc-text-color, #999);
+  white-space: nowrap;
+}
+
+/* ── 暗色模式 ──────────────────────────────────────────── */
+body.dark .auth-dialog .auth-tab {
+  color: var(--desc-text-color, #aaa);
+}
+
+body.dark .auth-dialog .auth-field input {
+  border-bottom-color: var(--input-bottom, rgba(255,255,255,0.12));
+}
+
+body.dark .auth-dialog .auth-error {
+  color: #ef5350;
+}
+
+/* ── 移动端适配 ────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .auth-dialog {
+    min-width: auto;
+    max-width: 100%;
+  }
+}

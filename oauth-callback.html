@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub 登录回调</title>
+  <title>登录回调</title>
   <style>
     body {
       display: flex;
@@ -25,11 +25,28 @@
       font-size: 18px;
       color: #333;
     }
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #999;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     .success {
       color: #28a745;
+      font-size: 18px;
     }
     .error {
       color: #dc3545;
+      font-size: 18px;
     }
   </style>
 </head>
@@ -39,67 +56,75 @@
   </div>
   
   <script>
-    async function handleCallback() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const error = urlParams.get('error');
+    // Supabase Auth OAuth 回调处理
+    // Supabase 在 OAuth 回调后会在 URL hash 中携带 access_token 等信息
+    // 格式: #access_token=xxx&refresh_token=xxx&expires_in=xxx&token_type=bearer&type=...
+    
+    function handleCallback() {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      const expires_in = params.get('expires_in');
+      const token_type = params.get('token_type');
+      const type = params.get('type'); // 'signup' | 'recovery' | etc.
+      const error = params.get('error');
+      const error_description = params.get('error_description');
       
       if (error) {
         document.getElementById('status').className = 'error';
-        document.getElementById('status').textContent = '登录失败: ' + error;
-        
-        // 通知父窗口
-        if (window.opener) {
-          window.opener.postMessage({
-            type: 'oauth-error',
-            message: error
-          }, window.location.origin);
-        }
+        document.getElementById('status').textContent = '登录失败: ' + (error_description || error);
+        setTimeout(() => { window.location.href = '/'; }, 3000);
         return;
       }
       
-      if (!code) {
+      if (!access_token) {
         document.getElementById('status').className = 'error';
-        document.getElementById('status').textContent = '授权码缺失';
+        document.getElementById('status').textContent = '未获取到授权信息';
+        setTimeout(() => { window.location.href = '/'; }, 3000);
         return;
       }
       
+      // 解析 JWT 获取用户信息
+      let user = null;
       try {
-        // 调用后端 API 换取 token
-        const response = await fetch('/api/auth/github?code=' + encodeURIComponent(code));
-        const result = await response.json();
-        
-        if (result.success) {
-          document.getElementById('status').className = 'success';
-          document.getElementById('status').textContent = '登录成功！正在关闭窗口...';
-          
-          // 通知父窗口
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'oauth-success',
-              token: result.token,
-              user: result.user
-            }, window.location.origin);
-          }
-          
-          // 3秒后关闭窗口
-          setTimeout(() => {
-            window.close();
-          }, 1500);
-        } else {
-          throw new Error(result.error || '登录失败');
-        }
-      } catch (err) {
-        document.getElementById('status').className = 'error';
-        document.getElementById('status').textContent = '登录失败: ' + err.message;
-        
-        if (window.opener) {
-          window.opener.postMessage({
-            type: 'oauth-error',
-            message: err.message
-          }, window.location.origin);
-        }
+        const payload = access_token.split('.')[1];
+        const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+        user = {
+          id: decoded.sub,
+          email: decoded.email || '',
+          aud: decoded.aud,
+          role: decoded.role,
+        };
+      } catch (e) {
+        console.error('Parse token error:', e);
       }
+      
+      // 构建 session 并保存到 localStorage
+      const session = {
+        access_token,
+        refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + parseInt(expires_in || 3600),
+        token_type: token_type || 'bearer',
+        user,
+      };
+      
+      localStorage.setItem('sb_session', JSON.stringify(session));
+      
+      // 显示成功状态
+      document.getElementById('status').className = 'success';
+      
+      if (type === 'recovery') {
+        document.getElementById('status').textContent = '密码重置验证成功，正在跳转...';
+      } else {
+        document.getElementById('status').textContent = '登录成功！正在跳转...';
+      }
+      
+      // 跳转回主页
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
     }
     
     handleCallback();

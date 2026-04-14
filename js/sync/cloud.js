@@ -1,52 +1,58 @@
-// 云端同步模块 - Supabase（用户无需配置，开箱即用）
+// 云端同步模块 - Supabase Auth（基于用户登录）
 const { gS } = require('../storage');
-const toast  = require('../toast');
+const toast = require('../toast');
+const supabaseAuth = require('./auth');
 
 const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
-const TABLE        = 'sync_data';
-const DEVICE_ID_KEY = 'cloud_device_id';
+const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
+const TABLE = 'sync_data';
 
 // ── Supabase REST 请求封装 ─────────────────────────────────
-const sbHeaders = {
-  'apikey':        SUPABASE_KEY,
-  'Authorization': `Bearer ${SUPABASE_KEY}`,
-  'Content-Type':  'application/json',
-};
-
 async function sbFetch(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: { ...sbHeaders, ...(options.headers || {}) },
-  });
-  if (res.status === 204) return null;          // DELETE / no content
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || json.error || `HTTP ${res.status}`);
-  return json;
+  // 获取当前用户的 access token
+  const accessToken = supabaseAuth.getAccessToken();
+  
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json',
+  };
+
+  // 如果已登录，使用用户的 access token；否则使用 anon key
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  } else {
+    headers['Authorization'] = `Bearer ${SUPABASE_ANON_KEY}`;
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...options,
+      headers: { ...headers, ...(options.headers || {}) },
+    });
+
+    // 204 No Content 或 201 Created（空 body）均直接返回 null
+    if (res.status === 204 || res.status === 201) return null;
+
+    const text = await res.text();
+    if (!text || !text.trim()) return null;
+
+    const json = JSON.parse(text);
+    if (!res.ok) {
+      const errMsg = json.message || json.error || json.msg || `HTTP ${res.status}`;
+      throw new Error(errMsg);
+    }
+    return json;
+  } catch (error) {
+    if (error.message && error.message.includes('JSON')) {
+      throw new Error('服务器响应格式错误');
+    }
+    throw error;
+  }
 }
 
 class CloudSync {
   constructor() {
-    this.config   = this._loadConfig();
-    this.deviceId = this._initDeviceId();
-  }
-
-  // ── 设备 ID（唯一标识，自动生成，长期保存）────────────────
-  _initDeviceId() {
-    let id = localStorage.getItem(DEVICE_ID_KEY);
-    if (!id) {
-      id = 'dev_' + Math.random().toString(36).slice(2, 15) +
-                    Math.random().toString(36).slice(2, 15);
-      localStorage.setItem(DEVICE_ID_KEY, id);
-    }
-    return id;
-  }
-
-  getCurrentDeviceId() { return this.deviceId; }
-
-  setDeviceId(id) {
-    this.deviceId = id.trim();
-    localStorage.setItem(DEVICE_ID_KEY, this.deviceId);
+    this.config = this._loadConfig();
   }
 
   // ── 同步配置 ──────────────────────────────────────────────
@@ -62,8 +68,14 @@ class CloudSync {
 
   getLastSyncTime() { return this.config.lastSync; }
 
+  // ── 认证状态代理 ──────────────────────────────────────────
+  isAuthenticated() { return supabaseAuth.isAuthenticated(); }
+  getUser()         { return supabaseAuth.getUser(); }
+  getEmail()        { return supabaseAuth.getEmail(); }
+  getUserId()       { return supabaseAuth.getUserId(); }
+
   // 兼容旧接口
-  isEnabled()  { return true; }
+  isEnabled()  { return this.isAuthenticated(); }
   enable()     {}
   disable()    {}
 
@@ -84,6 +96,7 @@ class CloudSync {
 
   // ── 合并云端数据到本地 ────────────────────────────────────
   mergeCloudData(cloudData) {
+    if (!cloudData || typeof cloudData !== 'object') return;
     Object.keys(cloudData).forEach(key => {
       if (key.startsWith('_')) return;
       try {
@@ -97,16 +110,23 @@ class CloudSync {
 
   // ── 上传到 Supabase ───────────────────────────────────────
   async upload() {
+    if (!this.isAuthenticated()) {
+      toast.show('请先登录后再同步');
+      return { success: false, error: 'Not authenticated' };
+    }
+
     try {
       toast.show('正在同步...');
-      const data       = this.getAllLocalData();
+      const data = this.getAllLocalData();
       const updated_at = new Date().toISOString();
+      const user_id = this.getUserId();
 
+      // 使用 upsert：如果该用户已有数据则更新，否则插入
       await sbFetch(TABLE, {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({
-          device_id:  this.deviceId,
+          user_id,
           data,
           updated_at,
         }),
@@ -126,10 +146,17 @@ class CloudSync {
 
   // ── 从 Supabase 下载 ──────────────────────────────────────
   async download() {
+    if (!this.isAuthenticated()) {
+      toast.show('请先登录后再同步');
+      return { success: false, error: 'Not authenticated' };
+    }
+
     try {
       toast.show('正在下载...');
+      const user_id = this.getUserId();
+
       const rows = await sbFetch(
-        `${TABLE}?device_id=eq.${encodeURIComponent(this.deviceId)}&select=data,updated_at`
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data,updated_at`
       );
 
       if (!rows || rows.length === 0) {
@@ -154,7 +181,9 @@ class CloudSync {
 
   // ── 自动同步 ──────────────────────────────────────────────
   async autoSync() {
-    if (this.config.autoSync) return await this.upload();
+    if (this.config.autoSync && this.isAuthenticated()) {
+      return await this.upload();
+    }
   }
 }
 
