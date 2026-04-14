@@ -36,19 +36,17 @@ self.addEventListener('install', (event) => {
 
 
 const cacheFirst = async ({ request, preloadResponsePromise}) => {
-  // First try to get the resource from the 
-  if(request.url.indexOf('http://')!=0){
-    request.url=request.url.replace('http://','https://')
+  // POST 请求不经过缓存，直接转发
+  if (request.method !== 'GET') {
+    return fetch(request);
   }
   const cache=await caches.open('v1');
   const responseFromCache = await cache.match(request);
   if (responseFromCache) {
     return responseFromCache;
   }
-
-
-  // Next try to get the resource from the network
-    return fetch(request);
+  // 缓存未命中，请求网络
+  return fetch(request);
 };
 
 self.addEventListener('fetch',(event)=>{
