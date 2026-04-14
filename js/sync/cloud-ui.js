@@ -358,9 +358,87 @@ cloudGroup.addNewItem(downloadItem);
 cloudGroup.addNewItem(autoSyncItem);
 cloudGroup.addNewItem(lastSyncItem);
 
+// ── 修改密码对话框 ────────────────────────────────────────
+function showResetPasswordDialog() {
+  const d = new dialog({
+    content: `
+      <div class="auth-dialog">
+        <div class="auth-tabs">
+          <button class="auth-tab active">设置新密码</button>
+        </div>
+        <div class="auth-form">
+          <div class="auth-field">
+            <label>新密码</label>
+            <input type="password" id="auth-new-password" placeholder="至少6位新密码" autocomplete="new-password"/>
+          </div>
+          <div class="auth-field">
+            <label>确认新密码</label>
+            <input type="password" id="auth-new-password2" placeholder="再次输入新密码" autocomplete="new-password"/>
+          </div>
+          <div class="auth-actions">
+            <button class="btn ok" id="auth-update-pwd-btn">确认修改</button>
+          </div>
+          <div class="auth-error" id="auth-pwd-error"></div>
+        </div>
+      </div>
+    `,
+    clickOtherToClose: false,
+  });
+
+  setTimeout(() => { d.open(); }, 10);
+  const dd = d.getDialogDom();
+
+  dd.querySelector('#auth-update-pwd-btn').onclick = async () => {
+    const pwd = dd.querySelector('#auth-new-password').value;
+    const pwd2 = dd.querySelector('#auth-new-password2').value;
+    const errorEl = dd.querySelector('#auth-pwd-error');
+
+    if (!pwd) {
+      errorEl.textContent = '请输入新密码';
+      return;
+    }
+    if (pwd.length < 6) {
+      errorEl.textContent = '密码至少6位';
+      return;
+    }
+    if (pwd !== pwd2) {
+      errorEl.textContent = '两次密码不一致';
+      return;
+    }
+
+    errorEl.textContent = '';
+    dd.querySelector('#auth-update-pwd-btn').disabled = true;
+    dd.querySelector('#auth-update-pwd-btn').textContent = '修改中...';
+
+    const result = await supabaseAuth.updatePassword(pwd);
+
+    dd.querySelector('#auth-update-pwd-btn').disabled = false;
+    dd.querySelector('#auth-update-pwd-btn').textContent = '确认修改';
+
+    if (result.success) {
+      d.close();
+      setTimeout(() => { d.destroy(); }, 300);
+      refreshUI();
+    } else {
+      errorEl.textContent = result.error || '修改失败';
+    }
+  };
+
+  dd.querySelector('#auth-new-password2').addEventListener('keydown', e => {
+    if (e.key === 'Enter') dd.querySelector('#auth-update-pwd-btn').click();
+  });
+}
+
+// ── 注册密码重置回调 ──────────────────────────────────────
+supabaseAuth._onPasswordRecovery = showResetPasswordDialog;
+
 // ── 初始化：恢复登录状态 ──────────────────────────────────
-supabaseAuth.init().then(() => {
+supabaseAuth.init().then((isAuth) => {
   refreshUI();
+  // 登录成功后自动从云端下载数据
+  if (isAuth) {
+    cloudSync.download().catch(() => {});
+  }
 });
 
 module.exports = {};

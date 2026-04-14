@@ -30,8 +30,8 @@ async function sbFetch(path, options = {}) {
       headers: { ...headers, ...(options.headers || {}) },
     });
 
-    // 204 No Content 或 201 Created（空 body）均直接返回 null
-    if (res.status === 204 || res.status === 201) return null;
+    // 204 No Content 直接返回 null
+    if (res.status === 204) return null;
 
     const text = await res.text();
     if (!text || !text.trim()) return null;
@@ -121,16 +121,33 @@ class CloudSync {
       const updated_at = new Date().toISOString();
       const user_id = this.getUserId();
 
-      // 使用 upsert：如果该用户已有数据则更新，否则插入
-      await sbFetch(TABLE, {
-        method: 'POST',
-        headers: { 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify({
-          user_id,
-          data,
-          updated_at,
-        }),
-      });
+      // 先查询该用户是否已有数据
+      const existing = await sbFetch(
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=id`
+      );
+
+      if (existing && existing.length > 0) {
+        // 已有记录，使用 PATCH 更新
+        await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            data,
+            updated_at,
+          }),
+        });
+      } else {
+        // 无记录，使用 POST 插入
+        await sbFetch(TABLE, {
+          method: 'POST',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            user_id,
+            data,
+            updated_at,
+          }),
+        });
+      }
 
       this.config.lastSync = updated_at;
       this.saveConfig();

@@ -397,7 +397,9 @@ class SupabaseAuth {
       setTimeout(() => {
         if (this._oauthSuccess) {
           if (this._oauthType === 'recovery') {
-            toast.show('密码重置验证成功 ✓');
+            toast.show('密码重置验证成功，请设置新密码');
+            // 触发密码重置回调，让 cloud-ui 弹出修改密码对话框
+            if (this._onPasswordRecovery) this._onPasswordRecovery();
           } else {
             toast.show('GitHub 登录成功 ✓');
           }
