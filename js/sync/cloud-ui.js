@@ -168,7 +168,10 @@ function showLoginDialog() {
       cloudSync.config.autoSync = true;
       cloudSync.saveConfig();
       refreshUI();
-      cloudSync.download().catch(() => {});
+      _autoSyncing = true;
+      cloudSync.download().catch(() => {}).finally(() => {
+        _autoSyncing = false;
+      });
     } else {
       errorEl.textContent = result.error || '登录失败';
     }
@@ -219,7 +222,10 @@ function showLoginDialog() {
         cloudSync.config.autoSync = true;
         cloudSync.saveConfig();
         refreshUI();
-        cloudSync.download().catch(() => {});
+        _autoSyncing = true;
+        cloudSync.download().catch(() => {}).finally(() => {
+          _autoSyncing = false;
+        });
       }
     } else {
       errorEl.textContent = result.error || '注册失败';
@@ -443,12 +449,18 @@ supabaseAuth._onPasswordRecovery = showResetPasswordDialog;
 
 // ── 数据变更时自动同步到云端 ──────────────────────────────
 let _autoSyncTimer = null;
+let _autoSyncing = false;
 storage.on('storage', () => {
   if (!cloudSync.config.autoSync || !cloudSync.isAuthenticated()) return;
+  // 上传期间不再触发，避免 saveConfig → storage事件 → 无限循环
+  if (_autoSyncing) return;
   // 防抖：3秒内多次变更只触发一次上传
   clearTimeout(_autoSyncTimer);
   _autoSyncTimer = setTimeout(() => {
-    cloudSync.upload().catch(() => {});
+    _autoSyncing = true;
+    cloudSync.upload().catch(() => {}).finally(() => {
+      _autoSyncing = false;
+    });
   }, 3000);
 });
 
@@ -459,7 +471,10 @@ supabaseAuth.init().then((isAuth) => {
   if (isAuth) {
     cloudSync.config.autoSync = true;
     cloudSync.saveConfig();
-    cloudSync.download().catch(() => {});
+    _autoSyncing = true;
+    cloudSync.download().catch(() => {}).finally(() => {
+      _autoSyncing = false;
+    });
   }
 });
 
