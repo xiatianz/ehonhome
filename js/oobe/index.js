@@ -6,6 +6,7 @@ const ignores=require('../ignores');
 const sync=require("../sync");
 
 var stp = gS('oobe');
+stp.agree = true; // 已移除用户协议弹窗
 if (!stp.agree) {
     var lichtml = ignores.lic;
     var i = 0;
