@@ -283,6 +283,17 @@ class CloudSync {
     return null;
   }
 
+  // ── 检测本地数据是否丢失（清缓存/换设备）──────────────
+  // 本地数据为空但快照非空 → 数据丢失，不是主动删除
+  _isLocalDataLost(localLinkData, snapshot) {
+    if (!snapshot) return false;
+    const hasLocalLinks = localLinkData.links && localLinkData.links.length > 0;
+    const hasLocalCate = localLinkData.cate && Object.keys(localLinkData.cate).some(k => localLinkData.cate[k] && localLinkData.cate[k].length > 0);
+    const hasSnapLinks = snapshot.links && snapshot.links.length > 0;
+    const hasSnapCate = snapshot.cate && Object.keys(snapshot.cate).some(k => snapshot.cate[k] && snapshot.cate[k].length > 0);
+    return (!hasLocalLinks && !hasLocalCate) && (hasSnapLinks || hasSnapCate);
+  }
+
   // ── 上传到 Supabase（基于快照的增删同步）──────────────
   async upload(silent) {
     if (!this.isAuthenticated()) {
@@ -324,7 +335,10 @@ class CloudSync {
 
       // 基于快照智能合并
       let mergedLinkData;
-      if (snapshot && cloudLinkData) {
+      if (this._isLocalDataLost(localLinkData, snapshot) && cloudLinkData) {
+        // 本地数据丢失（清缓存/换设备）：直接采用云端数据，不合并
+        mergedLinkData = cloudLinkData;
+      } else if (snapshot && cloudLinkData) {
         mergedLinkData = {
           links: smartMergeLinks(localLinkData.links, cloudLinkData.links, snapshot.links),
           cate: smartMergeCate(localLinkData.cate, cloudLinkData.cate, snapshot.cate),
@@ -419,7 +433,12 @@ class CloudSync {
 
       // 基于快照智能合并
       let mergedLinks, mergedCate, mergedCateList;
-      if (snapshot) {
+      if (this._isLocalDataLost(localLinkData, snapshot)) {
+        // 本地数据丢失（清缓存/换设备）：直接采用云端数据，不合并
+        mergedLinks = cloudLinkData.links;
+        mergedCate = cloudLinkData.cate;
+        mergedCateList = cloudLinkData.catelist;
+      } else if (snapshot) {
         mergedLinks = smartMergeLinks(localLinkData.links, cloudLinkData.links, snapshot.links);
         mergedCate = smartMergeCate(localLinkData.cate, cloudLinkData.cate, snapshot.cate);
         mergedCateList = smartMergeCateLists(localLinkData.catelist, cloudLinkData.catelist, snapshot.catelist);
