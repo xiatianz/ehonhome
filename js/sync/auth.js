@@ -1,9 +1,9 @@
-// Supabase Auth 认证模块 - 使用 Email 登录
+// Supabase Auth 认证模块 - 使用 Email / GitHub / 支付宝登录
 const { gS } = require('../storage');
 const toast = require('../toast');
 
-const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
+const SUPABASE_URL = 'https://sbp-2bar7udy02n8mtsi.supabase.opentrust.net';
+const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNicC0yYmFyN3VkeTAybjhtdHNpIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTkzNzUzMzksImV4cCI6MjA3NDk1MTMzOX0.i3F2ukeB9JAhfUrKFOxMLn_COo0vkagM_Dj5WrJNBHI';
 
 // ── Supabase Auth API 封装 ─────────────────────────────────
 class SupabaseAuth {
@@ -42,10 +42,12 @@ class SupabaseAuth {
     if (saved) {
       try {
         const session = JSON.parse(saved);
-        // 检查是否过期
-        if (session.expires_at && new Date(session.expires_at * 1000) > new Date()) {
+        if (session.refresh_token) {
+          // 即使 access_token 过期，也先恢复 session（后续用 refresh_token 刷新）
           this.session = session;
           this.currentUser = session.user;
+          // 标记 token 是否已过期，供 init() 判断是否需要立即刷新
+          this._tokenExpired = !session.expires_at || new Date(session.expires_at * 1000) <= new Date();
           return true;
         }
       } catch (e) {
@@ -205,6 +207,17 @@ class SupabaseAuth {
     window.location.href = url;
   }
 
+  // ── 支付宝 OAuth 登录 ────────────────────────────────────
+  signInWithAlipay() {
+    // Supabase OAuth 流程（与 GitHub 一致，provider 改为 alipay）：
+    // 1. 重定向到 Supabase 的 /auth/v1/authorize?provider=alipay 端点
+    // 2. Supabase 回调到自己的 /auth/v1/callback
+    // 3. Supabase 重定向到 redirect_to，在 URL hash 中携带 token
+    // 前提：需在 Supabase Dashboard → Authentication → Providers 中开启 Alipay
+    const redirectTo = window.location.origin + window.location.pathname;
+    const url = `${SUPABASE_URL}/auth/v1/authorize?provider=alipay&redirect_to=${encodeURIComponent(redirectTo)}`;
+    window.location.href = url;
+  }
   // ── 处理 OAuth 回调（页面加载时从 URL hash 恢复 session）────
   handleOAuthCallback() {
     const hash = window.location.hash.substring(1);
@@ -281,6 +294,7 @@ class SupabaseAuth {
 
   // ── 登出 ──────────────────────────────────────────────────
   async signOut() {
+    this._stopRefreshTimer();
     try {
       if (this.session?.access_token) {
         await this._request('logout', {
@@ -386,7 +400,12 @@ class SupabaseAuth {
       }
     } catch (error) {
       console.error('[Auth] Refresh session error:', error);
-      this._clearSession();
+      // 只有认证错误（refresh_token 也过期/无效）才清除 session
+      // 网络错误保留 session，下次定时器会重试
+      const msg = error.message || '';
+      if (msg.includes('401') || msg.includes('403') || msg.includes('JWT') || msg.includes('expired') || msg.includes('invalid')) {
+        this._clearSession();
+      }
     }
     
     return false;
@@ -404,11 +423,12 @@ class SupabaseAuth {
             // 触发密码重置回调，让 cloud-ui 弹出修改密码对话框
             if (this._onPasswordRecovery) this._onPasswordRecovery();
           } else {
-            toast.show('GitHub 登录成功 ✓');
+            toast.show('登录成功 ✓');
           }
           this._oauthSuccess = false;
         }
       }, 500);
+      this._startRefreshTimer();
       return this.isAuthenticated();
     }
 
@@ -422,13 +442,23 @@ class SupabaseAuth {
 
     // 尝试从 localStorage 恢复 session
     if (this._loadSession()) {
-      // 验证 session 是否仍然有效（异步，不阻塞初始化）
-      this.getCurrentUser().then(user => {
-        if (!user) {
-          // 验证失败，尝试用 refresh_token 刷新
-          this.refreshSession();
+      if (this._tokenExpired) {
+        // access_token 已过期，立即用 refresh_token 刷新
+        const refreshed = await this.refreshSession();
+        if (!refreshed) {
+          // 刷新也失败，session 彻底无效
+          return false;
         }
-      });
+      } else {
+        // token 未过期，异步验证有效性
+        this.getCurrentUser().then(user => {
+          if (!user) {
+            // 验证失败，尝试用 refresh_token 刷新
+            this.refreshSession();
+          }
+        });
+      }
+      this._startRefreshTimer();
     }
     
     return this.isAuthenticated();
@@ -437,6 +467,41 @@ class SupabaseAuth {
   // ── 状态检查 ──────────────────────────────────────────────
   isAuthenticated() {
     return !!this.currentUser && !!this.session?.access_token;
+  }
+
+  // ── 定时刷新 Token ────────────────────────────────────────
+  // 每 10 分钟检查一次，在 access_token 过期前 5 分钟自动刷新
+  // 只要 refresh_token 有效（Supabase 默认永不过期），登录状态就永远保持
+  _refreshTimer = null;
+  _refreshInterval = 10 * 60 * 1000;  // 10 分钟检查一次
+  _refreshBuffer = 5 * 60;             // 提前 5 分钟刷新
+
+  _startRefreshTimer() {
+    this._stopRefreshTimer();
+    this._refreshTimer = setInterval(() => {
+      if (!this.session?.refresh_token) {
+        this._stopRefreshTimer();
+        return;
+      }
+      const expiresAt = this.session.expires_at;
+      const now = Math.floor(Date.now() / 1000);
+      // 在过期前 5 分钟刷新，或已过期则立即刷新
+      if (!expiresAt || now >= expiresAt - this._refreshBuffer) {
+        this.refreshSession().then(ok => {
+          if (!ok) {
+            // 刷新失败，停止定时器（session 已被 clearSession 清除）
+            this._stopRefreshTimer();
+          }
+        });
+      }
+    }, this._refreshInterval);
+  }
+
+  _stopRefreshTimer() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
   }
 
   getUser() {
@@ -449,7 +514,7 @@ class SupabaseAuth {
 
   getEmail() {
     if (!this.currentUser) return null;
-    // 优先显示 email，GitHub 用户可能没有 email 则显示用户名
+    // 优先显示 email，OAuth 用户可能没有 email 则显示昵称或用户名
     return this.currentUser.email || this.currentUser.user_metadata?.preferred_username || this.currentUser.user_metadata?.full_name || this.currentUser.user_metadata?.name || '已登录';
   }
 
