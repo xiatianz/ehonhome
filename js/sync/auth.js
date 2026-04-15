@@ -1,9 +1,9 @@
-// Supabase Auth 认证模块 - 使用 Email / GitHub / 支付宝登录
+// Supabase Auth 认证模块 - 使用 Email / GitHub 登录
 const { gS } = require('../storage');
 const toast = require('../toast');
 
-const SUPABASE_URL = 'https://sbp-2bar7udy02n8mtsi.supabase.opentrust.net';
-const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNicC0yYmFyN3VkeTAybjhtdHNpIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTkzNzUzMzksImV4cCI6MjA3NDk1MTMzOX0.i3F2ukeB9JAhfUrKFOxMLn_COo0vkagM_Dj5WrJNBHI';
+const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
 
 // ── Supabase Auth API 封装 ─────────────────────────────────
 class SupabaseAuth {
@@ -207,17 +207,6 @@ class SupabaseAuth {
     window.location.href = url;
   }
 
-  // ── 支付宝 OAuth 登录 ────────────────────────────────────
-  signInWithAlipay() {
-    // Supabase OAuth 流程（与 GitHub 一致，provider 改为 alipay）：
-    // 1. 重定向到 Supabase 的 /auth/v1/authorize?provider=alipay 端点
-    // 2. Supabase 回调到自己的 /auth/v1/callback
-    // 3. Supabase 重定向到 redirect_to，在 URL hash 中携带 token
-    // 前提：需在 Supabase Dashboard → Authentication → Providers 中开启 Alipay
-    const redirectTo = window.location.origin + window.location.pathname;
-    const url = `${SUPABASE_URL}/auth/v1/authorize?provider=alipay&redirect_to=${encodeURIComponent(redirectTo)}`;
-    window.location.href = url;
-  }
   // ── 处理 OAuth 回调（页面加载时从 URL hash 恢复 session）────
   handleOAuthCallback() {
     const hash = window.location.hash.substring(1);

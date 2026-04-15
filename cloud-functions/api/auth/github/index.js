@@ -5,7 +5,7 @@
 export default function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
-  const SUPABASE_URL = 'https://sbp-2bar7udy02n8mtsi.supabase.opentrust.net';
+  const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
   const redirectTo = url.origin + '/';
   const authUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(redirectTo)}`;
   return Response.redirect(authUrl, 302);

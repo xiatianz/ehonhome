@@ -11872,8 +11872,8 @@ const toast = _r(6);
 const supabaseAuth = _r(94);
 const link = _r(29);
 
-const SUPABASE_URL = 'https://sbp-2bar7udy02n8mtsi.supabase.opentrust.net';
-const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNicC0yYmFyN3VkeTAybjhtdHNpIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTkzNzUzMzksImV4cCI6MjA3NDk1MTMzOX0.i3F2ukeB9JAhfUrKFOxMLn_COo0vkagM_Dj5WrJNBHI';
+const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
 const TABLE = 'sync_data';
 
 // ── Supabase REST 请求封装 ─────────────────────────────────
@@ -12283,8 +12283,8 @@ module.exports = cloudSync;
 const { gS } = _r(8);
 const toast = _r(6);
 
-const SUPABASE_URL = 'https://sbp-2bar7udy02n8mtsi.supabase.opentrust.net';
-const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNicC0yYmFyN3VkeTAybjhtdHNpIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTkzNzUzMzksImV4cCI6MjA3NDk1MTMzOX0.i3F2ukeB9JAhfUrKFOxMLn_COo0vkagM_Dj5WrJNBHI';
+const SUPABASE_URL = 'https://prdcrawrgyjoqchwigwi.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_SuO0A9cl2DH6Ru-_OPFFYA_SvOAdl-F';
 
 // ── Supabase Auth API 封装 ─────────────────────────────────
 class SupabaseAuth {

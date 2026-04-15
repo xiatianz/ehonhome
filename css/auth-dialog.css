@@ -142,35 +142,6 @@
   flex-shrink: 0;
 }
 
-/* ── 支付宝登录按钮 ─────────────────────────────────────── */
-.auth-dialog .auth-alipay-btn {
-  width: 100%;
-  height: 40px;
-  border: 1px solid var(--input-bottom, rgba(0,0,0,0.2));
-  border-radius: 6px;
-  background-color: #1677ff;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: background-color 0.2s, border-color 0.2s;
-  margin-bottom: 4px;
-}
-
-.auth-dialog .auth-alipay-btn:hover {
-  background-color: #4096ff;
-}
-
-.auth-dialog .auth-alipay-btn:active {
-  background-color: #0958d9;
-}
-
-.auth-dialog .auth-alipay-btn svg {
-  flex-shrink: 0;
-}
 /* ── 分隔线 ──────────────────────────────────────────────── */
 .auth-dialog .auth-divider {
   display: flex;
