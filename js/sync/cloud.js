@@ -227,15 +227,60 @@ class CloudSync {
     });
   }
 
-  // ── 保存快照 ────────────────────────────────────────────
+  // ── 保存快照（同时存 localStorage 和 Supabase）────────
   _saveSnapshot(linkData) {
+    // 本地缓存（快速读取，避免每次同步都请求云端）
     this.config.snapshot = linkData;
     this.saveConfig();
+    // 异步写入 Supabase（持久化，清除浏览器数据后不丢失）
+    this._saveSnapshotToCloud(linkData);
   }
 
-  // ── 获取快照 ────────────────────────────────────────────
+  // ── 将快照写入 Supabase ────────────────────────────────
+  async _saveSnapshotToCloud(snapshot) {
+    if (!this.isAuthenticated()) return;
+    try {
+      const user_id = this.getUserId();
+      const existing = await sbFetch(
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=user_id`
+      );
+      if (existing && existing.length > 0) {
+        await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ snapshot }),
+        });
+      }
+      // 如果还没有记录，snapshot 会在下次 upload 时一起写入
+    } catch (error) {
+      console.error('[Sync] Save snapshot to cloud error:', error);
+    }
+  }
+
+  // ── 获取快照（优先本地，缺失时从 Supabase 恢复）──────
   _getSnapshot() {
     return this.config.snapshot || null;
+  }
+
+  // ── 从 Supabase 恢复快照（本地快照丢失时调用）──────
+  async _restoreSnapshotFromCloud() {
+    if (!this.isAuthenticated()) return null;
+    try {
+      const user_id = this.getUserId();
+      const rows = await sbFetch(
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=snapshot`
+      );
+      if (rows && rows.length > 0 && rows[0].snapshot) {
+        const snapshot = rows[0].snapshot;
+        // 恢复到本地缓存
+        this.config.snapshot = snapshot;
+        this.saveConfig();
+        return snapshot;
+      }
+    } catch (error) {
+      console.error('[Sync] Restore snapshot from cloud error:', error);
+    }
+    return null;
   }
 
   // ── 上传到 Supabase（基于快照的增删同步）──────────────
@@ -250,21 +295,31 @@ class CloudSync {
 
       const user_id = this.getUserId();
       const localLinkData = await this.getLocalLinkData();
-      const snapshot = this._getSnapshot();
+      let snapshot = this._getSnapshot();
 
-      // 读取云端数据
+      // 读取云端数据（同时获取 snapshot 用于恢复）
       let cloudLinkData = null;
+      let cloudSnapshot = null;
       const existing = await sbFetch(
-        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data`
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data,snapshot`
       );
-      if (existing && existing.length > 0 && existing[0].data?.link) {
-        cloudLinkData = existing[0].data.link;
-        // 兼容旧格式：解包 {code:0, data:[...]} 包装对象
-        cloudLinkData = {
-          links: unwrapData(cloudLinkData.links) || [],
-          cate: unwrapData(cloudLinkData.cate) || {},
-          catelist: unwrapData(cloudLinkData.catelist) || [],
-        };
+      if (existing && existing.length > 0) {
+        if (existing[0].data?.link) {
+          cloudLinkData = existing[0].data.link;
+          cloudLinkData = {
+            links: unwrapData(cloudLinkData.links) || [],
+            cate: unwrapData(cloudLinkData.cate) || {},
+            catelist: unwrapData(cloudLinkData.catelist) || [],
+          };
+        }
+        cloudSnapshot = existing[0].snapshot || null;
+      }
+
+      // 本地快照丢失时，从云端恢复
+      if (!snapshot && cloudSnapshot) {
+        snapshot = cloudSnapshot;
+        this.config.snapshot = snapshot;
+        this.saveConfig();
       }
 
       // 基于快照智能合并
@@ -293,13 +348,13 @@ class CloudSync {
         await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ data, updated_at }),
+          body: JSON.stringify({ data, snapshot: mergedLinkData, updated_at }),
         });
       } else {
         await sbFetch(TABLE, {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ user_id, data, updated_at }),
+          body: JSON.stringify({ user_id, data, snapshot: mergedLinkData, updated_at }),
         });
       }
 
@@ -330,7 +385,7 @@ class CloudSync {
       const user_id = this.getUserId();
 
       const rows = await sbFetch(
-        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data,updated_at`
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data,snapshot,updated_at`
       );
 
       if (!rows || rows.length === 0) {
@@ -340,7 +395,6 @@ class CloudSync {
 
       let cloudLinkData = rows[0].data?.link;
       if (cloudLinkData) {
-        // 兼容旧格式：解包 {code:0, data:[...]} 包装对象
         cloudLinkData = {
           links: unwrapData(cloudLinkData.links) || [],
           cate: unwrapData(cloudLinkData.cate) || {},
@@ -353,7 +407,15 @@ class CloudSync {
       }
 
       const localLinkData = await this.getLocalLinkData();
-      const snapshot = this._getSnapshot();
+      let snapshot = this._getSnapshot();
+
+      // 本地快照丢失时，从云端恢复
+      const cloudSnapshot = rows[0].snapshot || null;
+      if (!snapshot && cloudSnapshot) {
+        snapshot = cloudSnapshot;
+        this.config.snapshot = snapshot;
+        this.saveConfig();
+      }
 
       // 基于快照智能合并
       let mergedLinks, mergedCate, mergedCateList;
@@ -377,14 +439,14 @@ class CloudSync {
         });
       });
 
-      // 上传合并结果到云端
+      // 上传合并结果到云端（同时写入 snapshot）
       const updated_at = new Date().toISOString();
       const mergedLinkData = { links: mergedLinks, cate: mergedCate, catelist: mergedCateList };
       const data = { link: mergedLinkData };
       await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
         method: 'PATCH',
         headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ data, updated_at }),
+        body: JSON.stringify({ data, snapshot: mergedLinkData, updated_at }),
       });
 
       // 更新快照

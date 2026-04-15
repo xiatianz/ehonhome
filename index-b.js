@@ -12097,11 +12097,50 @@ class CloudSync {
   _saveSnapshot(linkData) {
     this.config.snapshot = linkData;
     this.saveConfig();
+    this._saveSnapshotToCloud(linkData);
+  }
+
+  async _saveSnapshotToCloud(snapshot) {
+    if (!this.isAuthenticated()) return;
+    try {
+      const user_id = this.getUserId();
+      const existing = await sbFetch(
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=user_id`
+      );
+      if (existing && existing.length > 0) {
+        await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
+          method: 'PATCH',
+          headers: { 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ snapshot }),
+        });
+      }
+    } catch (error) {
+      console.error('[Sync] Save snapshot to cloud error:', error);
+    }
   }
 
   // ── 获取快照 ────────────────────────────────────────────
   _getSnapshot() {
     return this.config.snapshot || null;
+  }
+
+  async _restoreSnapshotFromCloud() {
+    if (!this.isAuthenticated()) return null;
+    try {
+      const user_id = this.getUserId();
+      const rows = await sbFetch(
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=snapshot`
+      );
+      if (rows && rows.length > 0 && rows[0].snapshot) {
+        const snapshot = rows[0].snapshot;
+        this.config.snapshot = snapshot;
+        this.saveConfig();
+        return snapshot;
+      }
+    } catch (error) {
+      console.error('[Sync] Restore snapshot from cloud error:', error);
+    }
+    return null;
   }
 
   // ── 上传到 Supabase（基于快照的增删同步）──────────────
@@ -12116,21 +12155,31 @@ class CloudSync {
 
       const user_id = this.getUserId();
       const localLinkData = await this.getLocalLinkData();
-      const snapshot = this._getSnapshot();
+      let snapshot = this._getSnapshot();
 
-      // 读取云端数据
+      // 读取云端数据（同时获取 snapshot 用于恢复）
       let cloudLinkData = null;
+      let cloudSnapshot = null;
       const existing = await sbFetch(
-        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data`
+        `${TABLE}?user_id=eq.${encodeURIComponent(user_id)}&select=data,snapshot`
       );
-      if (existing && existing.length > 0 && existing[0].data?.link) {
-        cloudLinkData = existing[0].data.link;
-        // 兼容旧格式：解包 {code:0, data:[...]} 包装对象
-        cloudLinkData = {
-          links: unwrapData(cloudLinkData.links) || [],
-          cate: unwrapData(cloudLinkData.cate) || {},
-          catelist: unwrapData(cloudLinkData.catelist) || [],
-        };
+      if (existing && existing.length > 0) {
+        if (existing[0].data?.link) {
+          cloudLinkData = existing[0].data.link;
+          cloudLinkData = {
+            links: unwrapData(cloudLinkData.links) || [],
+            cate: unwrapData(cloudLinkData.cate) || {},
+            catelist: unwrapData(cloudLinkData.catelist) || [],
+          };
+        }
+        cloudSnapshot = existing[0].snapshot || null;
+      }
+
+      // 本地快照丢失时，从云端恢复
+      if (!snapshot && cloudSnapshot) {
+        snapshot = cloudSnapshot;
+        this.config.snapshot = snapshot;
+        this.saveConfig();
       }
 
       // 基于快照智能合并
@@ -12159,13 +12208,13 @@ class CloudSync {
         await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
           method: 'PATCH',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ data, updated_at }),
+          body: JSON.stringify({ data, snapshot: mergedLinkData, updated_at }),
         });
       } else {
         await sbFetch(TABLE, {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ user_id, data, updated_at }),
+          body: JSON.stringify({ user_id, data, snapshot: mergedLinkData, updated_at }),
         });
       }
 
@@ -12219,7 +12268,15 @@ class CloudSync {
       }
 
       const localLinkData = await this.getLocalLinkData();
-      const snapshot = this._getSnapshot();
+      let snapshot = this._getSnapshot();
+
+      // 本地快照丢失时，从云端恢复
+      const cloudSnapshot = rows[0].snapshot || null;
+      if (!snapshot && cloudSnapshot) {
+        snapshot = cloudSnapshot;
+        this.config.snapshot = snapshot;
+        this.saveConfig();
+      }
 
       // 基于快照智能合并
       let mergedLinks, mergedCate, mergedCateList;
@@ -12250,7 +12307,7 @@ class CloudSync {
       await sbFetch(`${TABLE}?user_id=eq.${encodeURIComponent(user_id)}`, {
         method: 'PATCH',
         headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ data, updated_at }),
+        body: JSON.stringify({ data, snapshot: mergedLinkData, updated_at }),
       });
 
       // 更新快照
