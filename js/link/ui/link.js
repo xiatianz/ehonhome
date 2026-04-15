@@ -209,7 +209,7 @@ let toucheditmode=false;
 
 function glinkli(l,pz={}) {
     var li = el('li');
-    li.innerHTML = `<a href="${l.url}" target="_blank" rel="noopener noreferer"><div class="link-icon"><img/></div><p></p></a>`
+    li.innerHTML = `<a href="${l.url}" target="_blank" rel="noopener noreferrer"><div class="link-icon"><img/></div><p></p></a>`
     li.$('p').innerText = l.title;
     if(l.icon){
         li.$('img').src=l.icon;

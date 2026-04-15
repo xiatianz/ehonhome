@@ -72,7 +72,7 @@ self.addEventListener('message',function(ev){
     ]).then(function(){
       ev.source.postMessage('updated')
     })
-  }else if(ev.data.type="add"){
+  }else if(ev.data.type==="add"){
     try{
       addResourcesToCache([ev.data.url]);
     }catch(e){}

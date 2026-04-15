@@ -50,6 +50,10 @@ const cacheFirst = async ({ request, preloadResponsePromise}) => {
 };
 
 self.addEventListener('fetch',(event)=>{
+  // Supabase API 和 Auth 请求不经过 Service Worker，直接放行
+  if (event.request.url.includes('supabase.co')) {
+    return;
+  }
   event.respondWith(
     cacheFirst({
       request: event.request,
@@ -68,7 +72,7 @@ self.addEventListener('message',function(ev){
     ]).then(function(){
       ev.source.postMessage('updated')
     })
-  }else if(ev.data.type="add"){
+  }else if(ev.data.type==="add"){
     try{
       addResourcesToCache([ev.data.url]);
     }catch(e){}
