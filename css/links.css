@@ -181,7 +181,7 @@ body.dark .links .linkscroll:-webkit-scrollbar-thumb:hover{
 }
 .links ul.link-list li .link-icon{
   background-color: var(--link-bg);
-  border-radius: 10px;
+  border-radius: 14px;
   box-shadow: none;
   transition: all .2s;
   margin: 5px 7px;
@@ -215,13 +215,13 @@ body.dark .links .linkscroll:-webkit-scrollbar-thumb:hover{
   width: 24px;
   height: 24px;
   padding:6px 6px;
-  border-radius: 3px;
+  border-radius: 8px;
 }
 .links ul.link-list.xs li .link-icon{
   margin: 4px 4px;
   width: 36px;
   height: 36px;
-  border-radius: 3px;
+  border-radius: 8px;
 }
 .links ul.link-list.s li{
   width:60px;
@@ -232,13 +232,13 @@ body.dark .links .linkscroll:-webkit-scrollbar-thumb:hover{
   width: 30px;
   height: 30px;
   padding:10px 10px;
-  border-radius: 6px;
+  border-radius: 11px;
 }
 .links ul.link-list.s li .link-icon{
   margin: 5px 5px;
   width: 50px;
   height: 50px;
-  border-radius: 6px;
+  border-radius: 11px;
 }
 @media(max-width:400px){
   .links ul.link-list.s li{
@@ -257,13 +257,13 @@ body.dark .links .linkscroll:-webkit-scrollbar-thumb:hover{
   width: 40px;
   height: 40px;
   padding:10px 10px;
-  border-radius: 12px;
+  border-radius: 13px;
 }
 .links ul.link-list.l li .link-icon{
   margin: 10px 9px;
   width: 60px;
   height: 60px;
-  border-radius: 12px;
+  border-radius: 13px;
 }
 .links ul.link-list.l li a p{
   font-size: 15px;
@@ -276,12 +276,12 @@ body.dark .links .linkscroll:-webkit-scrollbar-thumb:hover{
   width: 40px;
   height: 40px;
   padding:20px 20px;
-  border-radius: 15px;
+  border-radius: 18px;
 }
 .links ul.link-list.xl li .link-icon{
   width: 80px;
   height: 80px;
-  border-radius: 15px;
+  border-radius: 18px;
   margin: 10px 9px;
 
 }

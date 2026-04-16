@@ -5,7 +5,10 @@ const { stp } = require("./core");
 var logoF = $('main .center .logo');
 // timelogo can be removed 
 if (!stp.logo) {
-  stp.logo='a';
+  stp.logo='b';
+}
+if (stp.timelogo_x === undefined) {
+  stp.timelogo_x = true;
 }
 var si = new SettingItem({
   index: 4,
